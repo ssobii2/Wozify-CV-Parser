@@ -1,0 +1,27 @@
+# Python virtual environment
+venv/
+
+# Uploaded and generated files
+uploads/*
+outputs/*
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Environment variables
+.env
+
+# IDE settings
+.vscode/
+.idea/
+
+# Keep folders but ignore contents
+!uploads/.gitkeep
+!outputs/.gitkeep
+
+*.pdf
+*.docx
+*.jpg
+*.jpeg
+*.png

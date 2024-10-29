@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Professional CV</title>
+    <style>
+        @page {
+            margin: 0;
+            size: A4;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 40px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #333;
+        }
+        .section {
+            margin-bottom: 25px;
+        }
+        .section-title {
+            color: #2c3e50;
+            border-bottom: 1px solid #bdc3c7;
+            padding-bottom: 5px;
+            margin-bottom: 15px;
+        }
+        .contact-info {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .skill-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .skill-item {
+            background-color: #f0f0f0;
+            padding: 5px 10px;
+            border-radius: 3px;
+            display: inline-block;
+            margin: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>{{ name if name else "Name Not Found" }}</h1>
+    </div>
+
+    {% if contact_info %}
+    <div class="contact-info">
+        {% if contact_info.email %}
+        <p>Email: {{ contact_info.email }}</p>
+        {% endif %}
+        {% if contact_info.phone %}
+        <p>Phone: {{ contact_info.phone }}</p>
+        {% endif %}
+        {% if contact_info.linkedin %}
+        <p>LinkedIn: {{ contact_info.linkedin }}</p>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% if education %}
+    <div class="section">
+        <h2 class="section-title">Education</h2>
+        {% for edu in education %}
+        <p>{{ edu }}</p>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if experience %}
+    <div class="section">
+        <h2 class="section-title">Professional Experience</h2>
+        {% for exp in experience %}
+        <p>{{ exp }}</p>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if skills %}
+    <div class="section">
+        <h2 class="section-title">Skills</h2>
+        <div class="skill-list">
+            {% for skill in skills %}
+            <span class="skill-item">{{ skill }}</span>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</body>
+</html> 
