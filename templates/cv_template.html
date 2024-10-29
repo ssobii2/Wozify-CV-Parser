@@ -2,98 +2,140 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Professional CV</title>
+    <title>CV</title>
     <style>
         @page {
             margin: 0;
             size: A4;
         }
         body {
-            font-family: Arial, sans-serif;
-            line-height: 1.6;
             margin: 0;
-            padding: 40px;
-        }
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-            padding-bottom: 20px;
-            border-bottom: 2px solid #333;
-        }
-        .section {
-            margin-bottom: 25px;
-        }
-        .section-title {
-            color: #2c3e50;
-            border-bottom: 1px solid #bdc3c7;
-            padding-bottom: 5px;
-            margin-bottom: 15px;
-        }
-        .contact-info {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        .skill-list {
+            font-family: Arial, sans-serif;
             display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            margin-top: 10px;
         }
-        .skill-item {
-            background-color: #f0f0f0;
-            padding: 5px 10px;
-            border-radius: 3px;
-            display: inline-block;
-            margin: 2px;
+        .left-sidebar {
+            background-color: #002B5B;
+            color: white;
+            width: 30%;
+            padding: 15px;
+            box-sizing: border-box;
+            min-height: 100vh;
+            position: fixed;
+        }
+        .main-content {
+            width: 70%;
+            margin-left: 30%;
+            padding: 15px;
+            box-sizing: border-box;
+        }
+        .logo {
+            display: block;
+            margin: 0 auto 30px;
+            width: 100%;
+        }
+        .icon {
+            width: 24px;
+            height: 24px;
+            filter: brightness(0) invert(1);
+        }
+        h2 {
+            color: white;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .skills-list, .languages-list {
+            list-style: none;
+            padding: 0 0 0 10px;
+            margin: 0;
+        }
+        .skills-list li, .languages-list li::before {
+            font-size: 16px;
+            line-height: 1.6;
+        }
+        .skills-list li::before, .languages-list li::before {
+            content: "•";
+            margin-right: 10px;
+        }
+        .section-header {
+            background-color: #1F4B70;
+            color: white;
+            padding: 8px;
+            margin: 15px auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        .cv-id, .job-title {
+            color: #FF1F7D;
+            margin: 0 0 20px;
+            text-align: right;
+        }
+        .cv-id {
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .job-title {
+            font-size: 28px;
         }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>{{ name if name else "Name Not Found" }}</h1>
-    </div>
-
-    {% if contact_info %}
-    <div class="contact-info">
-        {% if contact_info.email %}
-        <p>Email: {{ contact_info.email }}</p>
-        {% endif %}
-        {% if contact_info.phone %}
-        <p>Phone: {{ contact_info.phone }}</p>
-        {% endif %}
-        {% if contact_info.linkedin %}
-        <p>LinkedIn: {{ contact_info.linkedin }}</p>
-        {% endif %}
-    </div>
-    {% endif %}
-
-    {% if education %}
-    <div class="section">
-        <h2 class="section-title">Education</h2>
-        {% for edu in education %}
-        <p>{{ edu }}</p>
-        {% endfor %}
-    </div>
-    {% endif %}
-
-    {% if experience %}
-    <div class="section">
-        <h2 class="section-title">Professional Experience</h2>
-        {% for exp in experience %}
-        <p>{{ exp }}</p>
-        {% endfor %}
-    </div>
-    {% endif %}
-
-    {% if skills %}
-    <div class="section">
-        <h2 class="section-title">Skills</h2>
-        <div class="skill-list">
-            {% for skill in skills %}
-            <span class="skill-item">{{ skill }}</span>
+    <div class="left-sidebar">
+        <img src="{{ logo_path }}" alt="Wozify" class="logo">
+        
+        <h2>
+            <img src="{{ skills_icon_path }}" alt="" class="icon">
+            SKILLS & EXPERTISE
+        </h2>
+        <ul class="skills-list">
+            {% for category, skills in skills.items() %}
+                {% for skill in skills %}
+                    <li>{{ skill }}</li>
+                {% endfor %}
             {% endfor %}
-        </div>
+        </ul>
+
+        <h2>
+            <img src="{{ education_icon_path }}" alt="" class="icon">
+            EDUCATION
+        </h2>
+        {% for edu in education %}
+            <div>
+                <div>{{ edu.year }}</div>
+                <div>{{ edu.major }}</div>
+            </div>
+        {% endfor %}
+
+        {% if languages %}
+            <h2>LANGUAGES:</h2>
+            <ul class="languages-list">
+                {% for lang in languages %}
+                    <li>{{ lang }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
     </div>
-    {% endif %}
+
+    <div class="main-content">
+        <div class="cv-id">#{{ '%04d' | format(range(1, 9999) | random) }}</div>
+        <div class="job-title">{{ job_title }}</div>
+
+        <div class="section-header">
+            <img src="{{ profile_icon_path }}" alt="" class="icon">
+            PERSONAL PROFILE
+        </div>
+        <div>{{ summary }}</div>
+
+        <div class="section-header">
+            <img src="{{ work_icon_path }}" alt="" class="icon">
+            WORK HISTORY
+        </div>
+        {% for exp in experience %}
+        <div>{{ exp }}</div>
+        {% endfor %}
+    </div>
 </body>
-</html> 
+</html>

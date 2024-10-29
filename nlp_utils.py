@@ -156,6 +156,7 @@ class CVExtractor:
         # Initialize the result dictionary with all possible fields
         extracted_data = {
             'name': None,
+            'job_title': self.extract_current_position(text),
             'summary': None,
             'contact_info': {},
             'education': [],
@@ -184,17 +185,73 @@ class CVExtractor:
         if paragraphs:
             extracted_data['summary'] = paragraphs[0]
 
-        # Extract sections
+        # Extract education specifically using the education extractor
+        extracted_data['education'] = self.extract_education(text)
+
+        # Extract other sections
         for section_name, keywords in self.section_headers.items():
-            section_content = self.extract_section(text, keywords)
-            if section_content:
-                extracted_data[section_name] = section_content
+            if section_name != 'education':  # Skip education as we handled it separately
+                section_content = self.extract_section(text, keywords)
+                if section_content:
+                    extracted_data[section_name] = section_content
 
         # Extract and categorize skills
         extracted_data['skills'] = self.extract_skills(text)
 
         # Remove empty fields
         return {k: v for k, v in extracted_data.items() if v}
+
+    def extract_current_position(self, text: str) -> str:
+        """Extract the most recent job title from experience section."""
+        # Look for current position indicators
+        current_patterns = [
+            r'(Present|Current|Now)',
+            r'\b\d{4}\s*[-–]\s*(Present|Current|Now)\b'
+        ]
+        
+        lines = text.split('\n')
+        for i, line in enumerate(lines):
+            # Check if line contains current position indicators
+            if any(re.search(pattern, line, re.IGNORECASE) for pattern in current_patterns):
+                # Look at previous line for job title
+                if i > 0:
+                    # Remove common words and clean up the title
+                    title = lines[i-1].strip()
+                    title = re.sub(r'\b(at|for|with)\b.*$', '', title, flags=re.IGNORECASE)
+                    return title.strip()
+        
+        return "Professional"  # Default fallback
+
+    def extract_education(self, text: str) -> List[Dict]:
+        """Extract education information."""
+        education_data = []
+        
+        # Find education section
+        education_pattern = r'(?:EDUCATION|ACADEMIC BACKGROUND).*?(?=\n\s*(?:EXPERIENCE|SKILLS|PROJECTS|$))'
+        education_match = re.search(education_pattern, text, re.DOTALL | re.IGNORECASE)
+        
+        if education_match:
+            education_text = education_match.group(0)
+            # Split into lines and clean them
+            lines = [line.strip() for line in education_text.split('\n') if line.strip()]
+            
+            for line in lines:
+                # Skip the section header
+                if re.match(r'(?:EDUCATION|ACADEMIC BACKGROUND)', line, re.IGNORECASE):
+                    continue
+                
+                # Look for year patterns
+                year_match = re.search(r'(?:19|20)\d{2}(?:[-–]\d{4})?|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{4}', line, re.IGNORECASE)
+                # Look for degree/major patterns
+                degree_match = re.search(r'(?:Bachelor|Master|PhD|BSc|MSc|BA|MA|MD|Doctor)[^,\n]*', line, re.IGNORECASE)
+                
+                if year_match or degree_match:
+                    education_data.append({
+                        'year': year_match.group(0) if year_match else '',
+                        'major': degree_match.group(0).strip() if degree_match else line.strip()
+                    })
+        
+        return education_data
 
 def extract_entities(text: str) -> Dict:
     """Wrapper function for backward compatibility."""

@@ -11,7 +11,7 @@ os.makedirs("uploads", exist_ok=True)
 os.makedirs("outputs", exist_ok=True)
 
 def test_root_endpoint():
-    response = client.get("/")
+    response = client.get("/api")
     assert response.status_code == 200
     assert response.json() == {"message": "Welcome to the CV Parser API"}
 

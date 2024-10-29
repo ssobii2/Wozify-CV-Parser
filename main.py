@@ -1,6 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 import shutil
 import os
 import json
@@ -21,12 +22,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Configure pdfkit to use the installed wkhtmltopdf
+# Mount the frontend directory as static files
+app.mount("/static", StaticFiles(directory="frontend"), name="frontend")
+# Mount the assets directory
+app.mount("/assets", StaticFiles(directory="assets"), name="assets")
+
+# Configure pdfkit
 config = pdfkit.configuration(wkhtmltopdf=r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe')
 
-@app.get("/")
+@app.get("/api")
 async def root():
+    """API root endpoint"""
     return {"message": "Welcome to the CV Parser API"}
+
+@app.get("/", response_class=HTMLResponse)
+async def serve_frontend():
+    """Serve the frontend HTML"""
+    return FileResponse("frontend/index.html")
 
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
@@ -111,6 +123,16 @@ async def generate_cv(file: UploadFile = File(...)):
         text_content = parse_file(file_location)
         extracted_data = extract_entities(text_content)
         
+        # Add absolute paths for images
+        base_dir = os.path.abspath(os.path.dirname(__file__))
+        extracted_data.update({
+            'logo_path': os.path.join(base_dir, 'assets', 'images', 'logo.png'),
+            'skills_icon_path': os.path.join(base_dir, 'assets', 'images', 'skills.png'),
+            'education_icon_path': os.path.join(base_dir, 'assets', 'images', 'education.png'),
+            'profile_icon_path': os.path.join(base_dir, 'assets', 'images', 'profile.png'),
+            'work_icon_path': os.path.join(base_dir, 'assets', 'images', 'work.png')
+        })
+        
         # Set up Jinja2 environment
         env = Environment(loader=FileSystemLoader('templates'))
         template = env.get_template('cv_template.html')
@@ -126,13 +148,14 @@ async def generate_cv(file: UploadFile = File(...)):
         # Configure PDF options
         options = {
             'page-size': 'A4',
-            'margin-top': '0.75in',
-            'margin-right': '0.75in',
-            'margin-bottom': '0.75in',
-            'margin-left': '0.75in',
+            'margin-top': '0',
+            'margin-right': '0',
+            'margin-bottom': '0',
+            'margin-left': '0',
             'encoding': "UTF-8",
             'no-outline': None,
-            'enable-local-file-access': None
+            'enable-local-file-access': None,
+            'print-media-type': None
         }
         
         # Generate PDF
