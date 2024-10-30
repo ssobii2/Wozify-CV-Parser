@@ -12,6 +12,7 @@
             margin: 0;
             font-family: Arial, sans-serif;
             display: flex;
+            height: 371mm;
         }
         .left-sidebar {
             background-color: #002B5B;
@@ -19,7 +20,7 @@
             width: 30%;
             padding: 15px;
             box-sizing: border-box;
-            min-height: 100vh;
+            min-height: 371mm;
             position: fixed;
         }
         .main-content {
@@ -27,15 +28,20 @@
             margin-left: 30%;
             padding: 15px;
             box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 371mm;
         }
         .logo {
             display: block;
             margin: 0 auto 30px;
-            width: 100%;
+            max-width: 100%;
         }
         .icon {
-            width: 24px;
-            height: 24px;
+            width: 32px;
+            height: 32px;
             filter: brightness(0) invert(1);
         }
         h2 {
@@ -49,10 +55,7 @@
             list-style: none;
             padding: 0 0 0 10px;
             margin: 0;
-        }
-        .skills-list li, .languages-list li::before {
-            font-size: 16px;
-            line-height: 1.6;
+            margin-left: 30px;
         }
         .skills-list li::before, .languages-list li::before {
             content: "•";
@@ -61,12 +64,16 @@
         .section-header {
             background-color: #1F4B70;
             color: white;
-            padding: 8px;
-            margin: 15px auto;
+            padding: 12px;
+            margin: 15px 0;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 10px;
+            text-align: center;
+            gap: 15px;
+            font-size: 28px;
+            width: 100%;
+            box-sizing: border-box;
         }
         .cv-id, .job-title {
             color: #FF1F7D;

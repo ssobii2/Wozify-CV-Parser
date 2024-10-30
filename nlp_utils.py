@@ -1,7 +1,7 @@
 import re
 import spacy
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 # Load the English language model with custom pipeline components
 nlp = spacy.load('en_core_web_sm')
@@ -223,33 +223,150 @@ class CVExtractor:
         return "Professional"  # Default fallback
 
     def extract_education(self, text: str) -> List[Dict]:
-        """Extract education information."""
-        education_data = []
+        """Extract detailed education information."""
         
-        # Find education section
-        education_pattern = r'(?:EDUCATION|ACADEMIC BACKGROUND).*?(?=\n\s*(?:EXPERIENCE|SKILLS|PROJECTS|$))'
+        # Constants and helper functions with both English and Hungarian keywords
+        SCHOOLS = [
+            # English
+            'College', 'University', 'Institute', 'School', 'Academy', 'BASIS', 'Magnet',
+            # Hungarian
+            'Egyetem', 'Főiskola', 'Iskola', 'Gimnázium', 'Szakközépiskola', 'Technikum'
+        ]
+        
+        DEGREES = [
+            # English
+            'Associate', 'Bachelor', 'Master', 'PhD', 'Ph.D', 'BSc', 'BA', 'MS', 'MSc', 'MBA',
+            'Diploma', 'Engineer', 'Technician',
+            # Hungarian
+            'Mérnök', 'Diploma', 'Technikus', 'Érettségi', 'Szakképzés'
+        ]
+        
+        def has_school(text: str) -> bool:
+            return any(school.lower() in text.lower() for school in SCHOOLS)
+        
+        def has_degree(text: str) -> bool:
+            return any(degree.lower() in text.lower() for degree in DEGREES) or \
+                   bool(re.match(r'[ABM][A-Z\.]', text))
+        
+        def extract_gpa(text: str) -> Optional[str]:
+            # Support both English and Hungarian grade formats
+            gpa_match = re.search(r'GPA:?\s*([\d\.]+)', text, re.IGNORECASE)
+            grade_match = re.search(r'(?:Note|Jegy|Minősítés):\s*([\w]+)', text, re.IGNORECASE)
+            
+            if gpa_match:
+                return gpa_match.group(1)
+            elif grade_match:
+                grade = grade_match.group(1)
+                # Convert Hungarian grades if needed
+                grade_map = {
+                    'excellent': '5.0',
+                    'kitűnő': '5.0',
+                    'jeles': '5.0',
+                    'good': '4.0',
+                    'jó': '4.0',
+                    'satisfactory': '3.0',
+                    'közepes': '3.0'
+                }
+                return grade_map.get(grade.lower(), grade)
+            return None
+        
+        def extract_date(text: str) -> Optional[str]:
+            # Support both English and Hungarian date formats
+            date_patterns = [
+                r'(?:19|20)\d{2}',  # Year
+                r'\d{2}\.\d{2}\.\d{4}',  # Hungarian format
+                r'\d{4}/\d{2}/\d{2}',  # Alternative format
+                r'\d{2}/\d{2}/\d{4}'   # Alternative format
+            ]
+            
+            for pattern in date_patterns:
+                match = re.search(pattern, text)
+                if match:
+                    # Extract just the year if it's a full date
+                    year = re.search(r'(19|20)\d{2}', match.group(0))
+                    return year.group(0) if year else match.group(0)
+            return None
+        
+        education_data = []
+        current_entry = None
+        
+        # Extract education section
+        education_pattern = r'(?:EDUCATION|ACADEMIC|QUALIFICATIONS|TANULMÁNYOK|VÉGZETTSÉG).*?(?=\n\s*(?:EXPERIENCE|SKILLS|PROJECTS|PRACTICE|TAPASZTALAT|KÉSZSÉGEK|PROJEKTEK|$))'
         education_match = re.search(education_pattern, text, re.DOTALL | re.IGNORECASE)
         
         if education_match:
             education_text = education_match.group(0)
-            # Split into lines and clean them
             lines = [line.strip() for line in education_text.split('\n') if line.strip()]
             
             for line in lines:
-                # Skip the section header
-                if re.match(r'(?:EDUCATION|ACADEMIC BACKGROUND)', line, re.IGNORECASE):
+                # Skip section headers
+                if re.match(r'(?:EDUCATION|ACADEMIC|QUALIFICATIONS|TANULMÁNYOK|VÉGZETTSÉG)', line, re.IGNORECASE):
                     continue
                 
-                # Look for year patterns
-                year_match = re.search(r'(?:19|20)\d{2}(?:[-–]\d{4})?|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{4}', line, re.IGNORECASE)
-                # Look for degree/major patterns
-                degree_match = re.search(r'(?:Bachelor|Master|PhD|BSc|MSc|BA|MA|MD|Doctor)[^,\n]*', line, re.IGNORECASE)
+                # Start new entry if school or significant education keyword found
+                if has_school(line) or any(keyword in line.lower() for keyword in ['diploma', 'érettségi', 'final exam', 'leaving exam']):
+                    if current_entry and (current_entry['school'] or current_entry['degree']):
+                        education_data.append(current_entry)
+                    
+                    current_entry = {
+                        'school': line if has_school(line) else '',
+                        'degree': '',
+                        'gpa': '',
+                        'date': extract_date(line) or '',
+                        'descriptions': []
+                    }
+                    continue
                 
-                if year_match or degree_match:
-                    education_data.append({
-                        'year': year_match.group(0) if year_match else '',
-                        'major': degree_match.group(0).strip() if degree_match else line.strip()
-                    })
+                if current_entry is None:
+                    current_entry = {
+                        'school': '',
+                        'degree': '',
+                        'gpa': '',
+                        'date': '',
+                        'descriptions': []
+                    }
+                
+                # Extract degree
+                if has_degree(line) and not current_entry['degree']:
+                    current_entry['degree'] = line
+                    gpa = extract_gpa(line)
+                    if gpa:
+                        current_entry['gpa'] = gpa
+                    continue
+                
+                # Extract date if not found
+                if not current_entry['date']:
+                    date = extract_date(line)
+                    if date:
+                        current_entry['date'] = date
+                        continue
+                
+                # Extract GPA if not found
+                if not current_entry['gpa']:
+                    gpa = extract_gpa(line)
+                    if gpa:
+                        current_entry['gpa'] = gpa
+                        continue
+                
+                # Add to descriptions
+                if line not in [current_entry['school'], current_entry['degree']]:
+                    current_entry['descriptions'].append(line)
+            
+            # Don't forget to add the last entry
+            if current_entry and (current_entry['school'] or current_entry['degree']):
+                education_data.append(current_entry)
+        
+        # Clean up entries
+        for entry in education_data:
+            entry['descriptions'] = [
+                desc for desc in entry['descriptions']
+                if desc and not any([
+                    desc == entry['school'],
+                    desc == entry['degree'],
+                    extract_date(desc) == entry['date'],
+                    extract_gpa(desc) == entry['gpa']
+                ])
+            ]
         
         return education_data
 
