@@ -29,28 +29,19 @@ class CVExtractor:
             'references': ['references', 'referees']
         }
         
-        self.skill_categories = {
-            'programming_languages': [
-                'python', 'java', 'javascript', 'c++', 'c#', 'ruby', 'php', 'swift',
-                'kotlin', 'go', 'rust', 'typescript', 'scala', 'perl', 'r'
-            ],
-            'web_technologies': [
-                'html', 'css', 'react', 'angular', 'vue', 'node', 'django', 'flask',
-                'spring', 'asp.net', 'jquery', 'bootstrap', 'sass', 'less'
-            ],
-            'databases': [
-                'sql', 'mysql', 'postgresql', 'mongodb', 'oracle', 'sqlite', 'redis',
-                'cassandra', 'elasticsearch', 'dynamodb'
-            ],
-            'cloud_devops': [
-                'aws', 'azure', 'gcp', 'docker', 'kubernetes', 'jenkins', 'terraform',
-                'ansible', 'circleci', 'gitlab'
-            ],
-            'tools': [
-                'git', 'jira', 'confluence', 'slack', 'vscode', 'intellij', 'eclipse',
-                'postman', 'webpack', 'npm', 'yarn'
-            ]
-        }
+        # Remove skill categories and use a flat list of skills
+        self.skills = [
+            'python', 'java', 'javascript', 'c++', 'c#', 'ruby', 'php', 'swift',
+            'kotlin', 'go', 'rust', 'typescript', 'scala', 'perl', 'r',
+            'html', 'css', 'react', 'angular', 'vue', 'node', 'django', 'flask',
+            'spring', 'asp.net', 'jquery', 'bootstrap', 'sass', 'less',
+            'sql', 'mysql', 'postgresql', 'mongodb', 'oracle', 'sqlite', 'redis',
+            'cassandra', 'elasticsearch', 'dynamodb',
+            'aws', 'azure', 'gcp', 'docker', 'kubernetes', 'jenkins', 'terraform',
+            'ansible', 'circleci', 'gitlab',
+            'git', 'jira', 'confluence', 'slack', 'vscode', 'intellij', 'eclipse',
+            'postman', 'webpack', 'npm', 'yarn'
+        ]
 
     def extract_dates(self, text: str) -> List[str]:
         """Extract dates from text using various patterns."""
@@ -136,18 +127,16 @@ class CVExtractor:
 
         return content
 
-    def extract_skills(self, text: str) -> Dict[str, List[str]]:
-        """Extract and categorize skills."""
-        skills = {category: [] for category in self.skill_categories}
+    def extract_skills(self, text: str) -> List[str]:
+        """Extract skills from text."""
+        skills = []
         
-        # Extract skills by category
-        for category, keywords in self.skill_categories.items():
-            for keyword in keywords:
-                if re.search(r'\b' + keyword + r'\b', text, re.IGNORECASE):
-                    skills[category].append(keyword)
+        # Extract skills
+        for skill in self.skills:
+            if re.search(r'\b' + skill + r'\b', text, re.IGNORECASE):
+                skills.append(skill)
         
-        # Remove empty categories
-        return {k: sorted(v) for k, v in skills.items() if v}
+        return sorted(set(skills))
 
     def extract_entities(self, text: str) -> Dict:
         """Main method to extract all information from CV."""

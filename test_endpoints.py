@@ -18,6 +18,7 @@ def test_generate_cv_and_json():
         # shutil.copy("Aladar_Feher_CV.pdf", "test.pdf")
         # shutil.copy("MindtechApps_CV_LeventeV_Senior_ScrumMaster.pdf", "test.pdf")
         # shutil.copy("Medior Software engineer Devora Csaba IDnr 532 (1).pdf", "test.pdf")
+        # shutil.copy("Sample-CV.pdf", "test.pdf")
         
         # Test processing endpoint to generate JSON
         with open("test.pdf", "rb") as f:
