@@ -134,18 +134,63 @@ class CVExtractor:
 
     def extract_entities(self, text: str) -> Dict:
         """Main method to extract all information from CV."""
-        # Initialize the result dictionary with all possible fields
+        # Initialize the result dictionary with default empty values
         extracted_data = {
-            'profile': self.extract_profile(text),
-            'education': self.extract_education(text),
-            'experience': self.extract_work_experience(text),
-            'skills': self.extract_skills(text),
-            'current_position': self.extract_current_position(text),
-            'languages': self.extract_languages(text)
+            'profile': {
+                'name': '',
+                'email': '',
+                'phone': '',
+                'location': '',
+                'url': '',
+                'summary': ''
+            },
+            'education': [{
+                'school': '',
+                'degree': '',
+                'gpa': '',
+                'date': '',
+                'descriptions': []
+            }],
+            'experience': [{
+                'company': '',
+                'job_title': '',
+                'date': '',
+                'descriptions': []
+            }],
+            'skills': [],
+            'current_position': '',
+            'languages': [{
+                'language': '',
+                'proficiency': ''
+            }]
         }
         
-        # Remove empty fields
-        return {k: v for k, v in extracted_data.items() if v}
+        # Extract data and update only if values are found
+        profile_data = self.extract_profile(text)
+        if profile_data:
+            extracted_data['profile'].update(profile_data)
+        
+        education_data = self.extract_education(text)
+        if education_data:
+            extracted_data['education'] = education_data
+        
+        experience_data = self.extract_work_experience(text)
+        if experience_data:
+            extracted_data['experience'] = experience_data
+        
+        skills_data = self.extract_skills(text)
+        if skills_data:
+            extracted_data['skills'] = skills_data
+        
+        current_position = self.extract_current_position(text)
+        if current_position:
+            extracted_data['current_position'] = current_position
+        
+        languages_data = self.extract_languages(text)
+        if languages_data:
+            extracted_data['languages'] = languages_data
+        
+        return extracted_data
 
     def extract_current_position(self, text: str) -> Optional[str]:
         """Extract the most recent job title from experience section."""

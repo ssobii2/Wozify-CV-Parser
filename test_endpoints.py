@@ -13,8 +13,8 @@ os.makedirs("outputs", exist_ok=True)
 def test_generate_cv_and_json():
     try:
         # Copy the sample CV file to test with
-        shutil.copy("Konyves_Lajos_CV_EN_.pdf", "test.pdf")
-        # shutil.copy("My-CV-Simple.pdf", "test.pdf")
+        # shutil.copy("Konyves_Lajos_CV_EN_.pdf", "test.pdf")
+        shutil.copy("My-CV-Simple.pdf", "test.pdf")
         # shutil.copy("Aladar_Feher_CV.pdf", "test.pdf")
         # shutil.copy("MindtechApps_CV_LeventeV_Senior_ScrumMaster.pdf", "test.pdf")
         # shutil.copy("Medior Software engineer Devora Csaba IDnr 532 (1).pdf", "test.pdf")
