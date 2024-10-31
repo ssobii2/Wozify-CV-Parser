@@ -180,22 +180,18 @@ class CVExtractor:
         # Extract contact information
         extracted_data['contact_info'] = self.extract_contact_info(text)
 
+        # Extract education
+        extracted_data['education'] = self.extract_education(text)
+        
+        # Extract work experience
+        extracted_data['experience'] = self.extract_work_experience(text)
+
         # Extract summary (first paragraph that's not a section header)
         paragraphs = [p.text.strip() for p in doc.sents if len(p.text.strip()) > 50]
         if paragraphs:
             extracted_data['summary'] = paragraphs[0]
 
-        # Extract education specifically using the education extractor
-        extracted_data['education'] = self.extract_education(text)
-
-        # Extract other sections
-        for section_name, keywords in self.section_headers.items():
-            if section_name != 'education':  # Skip education as we handled it separately
-                section_content = self.extract_section(text, keywords)
-                if section_content:
-                    extracted_data[section_name] = section_content
-
-        # Extract and categorize skills
+        # Extract skills
         extracted_data['skills'] = self.extract_skills(text)
 
         # Remove empty fields
@@ -238,7 +234,7 @@ class CVExtractor:
             'Associate', 'Bachelor', 'Master', 'PhD', 'Ph.D', 'BSc', 'BA', 'MS', 'MSc', 'MBA',
             'Diploma', 'Engineer', 'Technician',
             # Hungarian
-            'Mérnök', 'Diploma', 'Technikus', 'Érettségi', 'Szakképzés'
+            'Mrnök', 'Diploma', 'Technikus', 'Érettségi', 'Szakképzés'
         ]
         
         def has_school(text: str) -> bool:
@@ -369,6 +365,120 @@ class CVExtractor:
             ]
         
         return education_data
+
+    def extract_work_experience(self, text: str) -> List[Dict]:
+        """Extract detailed work experience information."""
+        
+        def extract_date_range(text: str) -> Optional[str]:
+            date_patterns = [
+                r'(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\s.]*\d{4}\s*[-–]\s*(?:Present|Current|Now|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\s.]*\d{4})',
+                r'(?:20)\d{2}\s*[-–]\s*(?:(?:19|20)\d{2}|Present|Current|Now)',
+                r'\d{1,2}/\d{4}\s*[-–]\s*(?:\d{1,2}/\d{4}|Present|Current|Now)',
+                r'(?:Since|From|Starting)\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\s.]*\d{4}',
+                r'(?:Since|From|Starting)\s+\d{4}'
+            ]
+            
+            for pattern in date_patterns:
+                match = re.search(pattern, text, re.IGNORECASE)
+                if match:
+                    return match.group(0)
+            return None
+
+        def is_likely_company(text: str) -> bool:
+            company_indicators = ['inc', 'ltd', 'llc', 'corp', 'gmbh', 'kft', 'zrt', 'bt', 'nyrt']
+            
+            # Check if it's a standalone line with reasonable length
+            if len(text.split()) <= 5:
+                # Check for company indicators
+                if any(indicator in text.lower() for indicator in company_indicators):
+                    return True
+                # Check if it's in Title Case (typical for company names)
+                if text.istitle() or text.isupper():
+                    return True
+                # Check if it ends with typical company suffixes
+                if any(text.lower().endswith(suffix) for suffix in company_indicators):
+                    return True
+            return False
+
+        def is_likely_job_title(text: str) -> bool:
+            job_indicators = [
+                'developer', 'engineer', 'manager', 'consultant', 'analyst', 
+                'specialist', 'coordinator', 'assistant', 'director', 'lead',
+                'intern', 'trainee', 'administrator', 'supervisor'
+            ]
+            return any(indicator in text.lower() for indicator in job_indicators)
+
+        work_data = []
+        current_entry = None
+        
+        # Extract work experience section
+        work_pattern = r'(?:WORK\s*EXPERIENCE|EXPERIENCE|EMPLOYMENT|PROFESSIONAL\s*BACKGROUND|WORK\s*HISTORY).*?(?=\n\s*(?:EDUCATION|SKILLS|PROJECTS|LANGUAGES|CERTIFICATIONS|INTERESTS|$))'
+        work_match = re.search(work_pattern, text, re.DOTALL | re.IGNORECASE)
+        
+        if work_match:
+            work_text = work_match.group(0)
+            lines = [line.strip() for line in work_text.split('\n') if line.strip()]
+            
+            for i, line in enumerate(lines):
+                # Skip section headers
+                if re.match(r'(?:WORK\s*EXPERIENCE|EXPERIENCE|EMPLOYMENT|PROFESSIONAL\s*BACKGROUND|WORK\s*HISTORY)', line, re.IGNORECASE):
+                    continue
+                
+                # Look for date ranges
+                date = extract_date_range(line)
+                
+                if date:
+                    if current_entry and current_entry.get('descriptions'):
+                        work_data.append(current_entry)
+                    
+                    # Initialize new entry with empty values
+                    current_entry = {
+                        'company': '',
+                        'job_title': '',
+                        'date': date,
+                        'descriptions': []
+                    }
+                    
+                    # Look at surrounding lines for job title and company
+                    for j in range(max(0, i-2), i):
+                        prev_line = lines[j].strip()
+                        if not current_entry['job_title'] and is_likely_job_title(prev_line):
+                            current_entry['job_title'] = prev_line
+                        elif not current_entry['company'] and is_likely_company(prev_line):
+                            current_entry['company'] = prev_line
+                    
+                    continue
+                
+                if current_entry:
+                    # Add bullet points and regular descriptions
+                    if line.startswith(('•', '-', '✓', '*')) or re.match(r'^\d+\.\s', line):
+                        current_entry['descriptions'].append(line)
+                    elif len(line) > 30 and not extract_date_range(line):
+                        # Check if this line might be a job title or company name
+                        if not current_entry['job_title'] and is_likely_job_title(line):
+                            current_entry['job_title'] = line
+                        elif not current_entry['company'] and is_likely_company(line):
+                            current_entry['company'] = line
+                        else:
+                            current_entry['descriptions'].append(line)
+            
+            # Add the last entry
+            if current_entry and current_entry.get('descriptions'):
+                work_data.append(current_entry)
+        
+        # Clean up entries - ensure job titles are not empty
+        for entry in work_data:
+            if not entry['job_title']:
+                # Try to extract job title from descriptions if available
+                for desc in entry['descriptions']:
+                    if is_likely_job_title(desc):
+                        entry['job_title'] = desc
+                        entry['descriptions'].remove(desc)
+                        break
+                if not entry['job_title']:
+                    entry
+        
+        return work_data
 
 def extract_entities(text: str) -> Dict:
     """Wrapper function for backward compatibility."""
