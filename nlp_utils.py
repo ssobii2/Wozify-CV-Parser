@@ -20,13 +20,7 @@ class CVExtractor:
             'education': ['education', 'academic background', 'qualifications', 'academic qualifications'],
             'experience': ['experience', 'work experience', 'employment history', 'work history', 'professional experience'],
             'skills': ['skills', 'technical skills', 'competencies', 'expertise', 'technologies'],
-            'projects': ['projects', 'personal projects', 'key projects', 'professional projects'],
-            'certifications': ['certifications', 'certificates', 'professional certifications'],
-            'languages': ['languages', 'language skills'],
-            'interests': ['interests', 'hobbies', 'activities'],
-            'achievements': ['achievements', 'awards', 'honors', 'accomplishments'],
-            'publications': ['publications', 'research', 'papers'],
-            'references': ['references', 'referees']
+            'languages': ['language', 'languages', 'language skills'],
         }
         
         # Remove skill categories and use a flat list of skills
@@ -146,38 +140,37 @@ class CVExtractor:
             'education': self.extract_education(text),
             'experience': self.extract_work_experience(text),
             'skills': self.extract_skills(text),
-            'projects': [],
-            'certifications': [],
-            'languages': [],
-            'interests': [],
-            'achievements': [],
-            'publications': [],
-            'references': []
+            'current_position': self.extract_current_position(text),
+            'languages': self.extract_languages(text)
         }
         
         # Remove empty fields
         return {k: v for k, v in extracted_data.items() if v}
 
-    def extract_current_position(self, text: str) -> str:
+    def extract_current_position(self, text: str) -> Optional[str]:
         """Extract the most recent job title from experience section."""
-        # Look for current position indicators
-        current_patterns = [
-            r'(Present|Current|Now)',
-            r'\b\d{4}\s*[-–]\s*(Present|Current|Now)\b'
-        ]
+        work_experience = self.extract_work_experience(text)
         
-        lines = text.split('\n')
-        for i, line in enumerate(lines):
-            # Check if line contains current position indicators
-            if any(re.search(pattern, line, re.IGNORECASE) for pattern in current_patterns):
-                # Look at previous line for job title
-                if i > 0:
-                    # Remove common words and clean up the title
-                    title = lines[i-1].strip()
-                    title = re.sub(r'\b(at|for|with)\b.*$', '', title, flags=re.IGNORECASE)
-                    return title.strip()
+        # Find the most recent job based on the date
+        most_recent_job = None
+        most_recent_date = None
         
-        return "Professional"  # Default fallback
+        for job in work_experience:
+            date = job.get('date')
+            if date and ('Present' in date or 'Current' in date or 'Now' in date):
+                return job.get('job_title')
+            
+            # Parse the date to find the most recent one
+            if date:
+                # Extract the end year from the date range
+                end_year_match = re.search(r'\b\d{4}\b', date.split('-')[-1])
+                if end_year_match:
+                    end_year = int(end_year_match.group(0))
+                    if most_recent_date is None or end_year > most_recent_date:
+                        most_recent_date = end_year
+                        most_recent_job = job.get('job_title')
+        
+        return most_recent_job
 
     def extract_education(self, text: str) -> List[Dict]:
         """Extract detailed education information."""
@@ -755,6 +748,22 @@ class CVExtractor:
             'url': best_scores['url'][1],
             'summary': summary_text
         }
+
+    def extract_languages(self, text: str) -> List[Dict[str, str]]:
+        """Extract languages and their proficiency levels."""
+        languages_section = self.extract_section(text, self.section_headers['languages'])
+        languages = []
+
+        for line in languages_section:
+            # Use regex to find language-proficiency pairs
+            matches = re.findall(r'(\b[A-Za-z]+\b)\s*[-–:]\s*(\b[A-Za-z\s]+)', line)
+            for match in matches:
+                language, proficiency = match
+                # Basic validation to avoid extracting unrelated content
+                if language.isalpha() and proficiency.replace(' ', '').isalpha():
+                    languages.append({'language': language.strip(), 'proficiency': proficiency.strip()})
+
+        return languages if languages else []
 
 def extract_entities(text: str) -> Dict:
     """Wrapper function for backward compatibility."""
