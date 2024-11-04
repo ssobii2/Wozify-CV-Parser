@@ -6,12 +6,17 @@ import shutil
 import os
 import json
 from parsers import parse_file
-from nlp_utils import extract_entities
+from nlp_utils import (
+    CVExtractor, ProfileExtractor, EducationExtractor, 
+    ExperienceExtractor, SkillsExtractor, LanguageExtractor,
+    CurrentPositionExtractor
+)
 from jinja2 import Environment, FileSystemLoader
 import pdfkit
 import tempfile
 
 app = FastAPI()
+cv_extractor = CVExtractor()
 
 # Add CORS middleware
 app.add_middleware(
@@ -82,7 +87,7 @@ async def process_file(file: UploadFile = File(...)):
         text_content = parse_file(file_location)
         
         # Extract data using NLP
-        extracted_data = extract_entities(text_content)
+        extracted_data = cv_extractor.extract_entities(text_content)
         
         # Create outputs directory if it doesn't exist
         os.makedirs("outputs", exist_ok=True)
@@ -121,7 +126,7 @@ async def generate_cv(file: UploadFile = File(...)):
         
         # Parse and extract data
         text_content = parse_file(file_location)
-        extracted_data = extract_entities(text_content)
+        extracted_data = cv_extractor.extract_entities(text_content)
         
         # Add absolute paths for images
         base_dir = os.path.abspath(os.path.dirname(__file__))

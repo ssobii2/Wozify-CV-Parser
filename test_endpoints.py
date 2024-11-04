@@ -3,8 +3,14 @@ from fastapi.testclient import TestClient
 from main import app
 import os
 import shutil
+from nlp_utils import (
+    CVExtractor, ProfileExtractor, EducationExtractor, 
+    ExperienceExtractor, SkillsExtractor, LanguageExtractor,
+    CurrentPositionExtractor
+)
 
 client = TestClient(app)
+cv_extractor = CVExtractor()  # This will initialize with both extractors
 
 # Ensure test directories exist
 os.makedirs("uploads", exist_ok=True)

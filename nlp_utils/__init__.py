@@ -1,13 +1,15 @@
+from .profile_extractor import ProfileExtractor
+from .education_extractor import EducationExtractor
+from .experience_extractor import ExperienceExtractor
+from .skills_extractor import SkillsExtractor
+from .language_extractor import LanguageExtractor
+from .current_position_extractor import CurrentPositionExtractor
+
+# Move the CVExtractor class definition to __init__.py
 import re
 import spacy
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
-from nlp_utils.profile_extractor import ProfileExtractor
-from nlp_utils.education_extractor import EducationExtractor
-from nlp_utils.experience_extractor import ExperienceExtractor
-from nlp_utils.skills_extractor import SkillsExtractor
-from nlp_utils.language_extractor import LanguageExtractor
-from nlp_utils.current_position_extractor import CurrentPositionExtractor
 
 # Load the English language model with custom pipeline components
 nlp = spacy.load('en_core_web_sm')
@@ -29,6 +31,7 @@ class CVExtractor:
         ]
         
         self.section_headers = {
+            'profile': ['profile', 'personal information', 'contact information', 'contact details', 'personal details', 'about me', 'summary'],
             'education': ['education', 'academic background', 'qualifications', 'academic qualifications'],
             'experience': ['experience', 'work experience', 'employment history', 'work history', 'professional experience'],
             'skills': ['skills', 'technical skills', 'competencies', 'expertise', 'technologies'],
@@ -149,3 +152,8 @@ class CVExtractor:
     def extract_languages(self, text: str) -> List[Dict[str, str]]:
         """Extract languages and their proficiency levels using LanguageExtractor."""
         return self.language_extractor.extract_languages(text)
+
+__all__ = [
+    'ProfileExtractor', 'EducationExtractor', 'ExperienceExtractor', 
+    'SkillsExtractor', 'LanguageExtractor', 'CurrentPositionExtractor', 'CVExtractor'
+] 
