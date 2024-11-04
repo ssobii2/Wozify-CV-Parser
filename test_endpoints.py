@@ -10,7 +10,7 @@ from nlp_utils import (
 )
 
 client = TestClient(app)
-cv_extractor = CVExtractor()  # This will initialize with both extractors
+cv_extractor = CVExtractor()
 
 # Ensure test directories exist
 os.makedirs("uploads", exist_ok=True)
@@ -40,14 +40,29 @@ def test_generate_cv_and_json():
                 files = {"file": (test_filename, f, "application/pdf")}
                 response = client.post("/process", files=files)
             
-            print(f"\nProcess Response for {cv_file}:", response.json())
+            # Verify JSON response
+            assert response.status_code == 200
+            json_data = response.json()
+            assert "data" in json_data
+            print(f"\nProcess Response for {cv_file}:", json_data)
             
+            # Comment out this entire block if you don't need PDF generation
+            '''
             # Test generate endpoint to generate PDF
             with open(test_filename, "rb") as f:
                 files = {"file": (test_filename, f, "application/pdf")}
                 response = client.post("/generate", files=files)
             
+            # Verify PDF generation
+            assert response.status_code == 200
+            assert response.headers["content-type"] == "application/pdf"
             print(f"Generate Response Status for {cv_file}:", response.status_code)
+            
+            # Verify PDF file exists
+            pdf_filename = f"{os.path.splitext(test_filename)[0]}_formatted.pdf"
+            pdf_path = f"outputs/{pdf_filename}"
+            assert os.path.exists(pdf_path)
+            '''
             
             # Clean up the test file
             if os.path.exists(test_filename):

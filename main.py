@@ -135,7 +135,7 @@ async def generate_cv(file: UploadFile = File(...)):
             'skills_icon_path': os.path.join(base_dir, 'assets', 'images', 'skills.png'),
             'education_icon_path': os.path.join(base_dir, 'assets', 'images', 'education.png'),
             'profile_icon_path': os.path.join(base_dir, 'assets', 'images', 'profile.png'),
-            'work_icon_path': os.path.join(base_dir, 'assets', 'images', 'work.png')
+            'work_icon_path': os.path.join(base_dir, 'assets', 'images', 'work.png'),
         })
         
         # Set up Jinja2 environment
