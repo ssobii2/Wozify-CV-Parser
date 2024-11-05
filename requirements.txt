@@ -13,6 +13,7 @@ confection==0.1.5
 cryptography==43.0.3
 cssselect2==0.7.0
 cymem==2.0.8
+en_core_web_lg @ https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl#sha256=293e9547a655b25499198ab15a525b05b9407a75f10255e405e8c3854329ab63
 en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl#sha256=1932429db727d4bff3deed6b34cfc05df17794f4a52eeb26cf8928f7c1a0fb85
 fastapi==0.115.4
 fonttools==4.54.1
@@ -20,10 +21,13 @@ h11==0.14.0
 html5lib==1.1
 httpcore==1.0.6
 httpx==0.27.2
+hu_core_news_lg @ https://huggingface.co/huspacy/hu_core_news_lg/resolve/main/hu_core_news_lg-any-py3-none-any.whl#sha256=803471467921b9db7e77c48ac7bdf9a57c08949427a9dd957a1655cbbdf65adc
+huspacy==0.12.1
 idna==3.10
 iniconfig==2.0.0
 Jinja2==3.1.4
 langcodes==3.4.1
+langdetect==1.0.9
 language_data==1.2.0
 lxml==5.3.0
 marisa-trie==1.2.1
@@ -32,7 +36,7 @@ MarkupSafe==3.0.2
 mdurl==0.1.2
 murmurhash==1.0.10
 numpy==2.0.2
-packaging==24.1
+packaging==21.3
 pdfkit==1.0.0
 pdfminer.six==20240706
 pillow==11.0.0
@@ -43,6 +47,8 @@ pydantic==2.9.2
 pydantic_core==2.23.4
 pydyf==0.11.0
 Pygments==2.18.0
+pyparsing==3.2.0
+pypdf==5.1.0
 pyphen==0.16.0
 pytesseract==0.3.13
 pytest==8.3.3
