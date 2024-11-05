@@ -24,7 +24,7 @@ def test_generate_cv_and_json():
         "Aladar_Feher_CV.pdf",
         "MindtechApps_CV_LeventeV_Senior_ScrumMaster.pdf",
         "Medior Software engineer Devora Csaba IDnr 532 (1).pdf",
-        # "Sample-CV.pdf"  # Commented out as in original
+        "My-CV.pdf"
     ]
     
     try:

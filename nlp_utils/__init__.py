@@ -17,7 +17,7 @@ nlp_hu = spacy.load('hu_core_news_lg')
 
 class CVExtractor:
     def __init__(self):
-        self.profile_extractor = ProfileExtractor()
+        self.profile_extractor = ProfileExtractor(nlp_en, nlp_hu)
         self.education_extractor = EducationExtractor()
         self.experience_extractor = ExperienceExtractor()
         self.skills_extractor = SkillsExtractor()
