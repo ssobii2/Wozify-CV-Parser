@@ -12,14 +12,14 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
 # Load English and Hungarian models
-nlp_en = spacy.load('en_core_web_lg')
+nlp_en = spacy.load('en_core_web_sm')
 nlp_hu = spacy.load('hu_core_news_lg')
 
 class CVExtractor:
     def __init__(self):
         self.profile_extractor = ProfileExtractor(nlp_en, nlp_hu)
         self.education_extractor = EducationExtractor()
-        self.experience_extractor = ExperienceExtractor()
+        self.experience_extractor = ExperienceExtractor(nlp_en, nlp_hu)
         self.skills_extractor = SkillsExtractor()
         self.language_extractor = LanguageExtractor()
         self.current_position_extractor = CurrentPositionExtractor()
