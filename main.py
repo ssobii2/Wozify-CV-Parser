@@ -163,11 +163,14 @@ async def generate_cv(file: UploadFile = File(...)):
             'print-media-type': None
         }
         
-        # Generate PDF
+        # Ensure the CSS file path is correct
+        css_path = os.path.join(base_dir, 'templates', 'cv_template.css')
+        
+        # Generate PDF with CSS
         output_filename = f"{os.path.splitext(filename)[0]}_formatted.pdf"
         output_path = f"outputs/{output_filename}"
         
-        pdfkit.from_file(temp_html_path, output_path, options=options, configuration=config)
+        pdfkit.from_file(temp_html_path, output_path, options=options, configuration=config, css=css_path)
         
         # Clean up temporary file
         os.unlink(temp_html_path)

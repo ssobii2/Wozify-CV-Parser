@@ -3,91 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>CV</title>
-    <style>
-        @page {
-            margin: 0;
-            size: A4;
-        }
-        body {
-            margin: 0;
-            font-family: Arial, sans-serif;
-            display: flex;
-            height: 371mm;
-        }
-        .left-sidebar {
-            background-color: #002B5B;
-            color: white;
-            width: 30%;
-            padding: 15px;
-            box-sizing: border-box;
-            min-height: 371mm;
-            position: fixed;
-        }
-        .main-content {
-            width: 70%;
-            margin-left: 30%;
-            padding: 15px;
-            box-sizing: border-box;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            min-height: 371mm;
-        }
-        .logo {
-            display: block;
-            margin: 0 auto 30px;
-            max-width: 100%;
-        }
-        .icon {
-            width: 32px;
-            height: 32px;
-            filter: brightness(0) invert(1);
-        }
-        h2 {
-            color: white;
-            font-size: 20px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .skills-list, .languages-list {
-            list-style: none;
-            padding: 0 0 0 10px;
-            margin: 0;
-            margin-left: 30px;
-        }
-        .skills-list li::before, .languages-list li::before {
-            content: "•";
-            margin-right: 10px;
-        }
-        .section-header {
-            background-color: #1F4B70;
-            color: white;
-            padding: 12px;
-            margin: 15px 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            gap: 15px;
-            font-size: 28px;
-            width: 100%;
-            box-sizing: border-box;
-        }
-        .cv-id, .job-title {
-            color: #FF1F7D;
-            margin: 0 0 20px;
-            text-align: right;
-        }
-        .cv-id {
-            font-size: 24px;
-            font-weight: bold;
-        }
-        .job-title {
-            font-size: 28px;
-        }
-    </style>
+    <link rel="stylesheet" href="/cv_template.css">
 </head>
 <body>
     <div class="left-sidebar">
@@ -108,16 +24,10 @@
             EDUCATION
         </h2>
         {% for edu in education %}
-            <div>
-                <div>{{ edu.date }}</div>
-                <div>{{ edu.school }}</div>
-                <div>{{ edu.degree }}</div>
-                {% if edu.gpa %}
-                    <div>GPA: {{ edu.gpa }}</div>
-                {% endif %}
-                {% for desc in edu.descriptions %}
-                    <div>{{ desc }}</div>
-                {% endfor %}
+            <div class="education-entry">
+                <div class="education-date">{{ edu.date }}</div>
+                <div class="education-degree">{{ edu.degree }}</div>
+                <div class="education-school">{{ edu.school }}</div>
             </div>
         {% endfor %}
 
@@ -148,13 +58,14 @@
             WORK HISTORY
         </div>
         {% for exp in experience %}
-            <div>
-                <div>{{ exp.date }}</div>
-                <div>{{ exp.company }}</div>
-                <div>{{ exp.job_title }}</div>
-                {% for desc in exp.descriptions %}
-                    <div>{{ desc }}</div>
-                {% endfor %}
+            <div class="experience-entry">
+                <div class="experience-date">{{ exp.date }}</div>
+                <div class="experience-job-title">{{ exp.job_title }} - {{ exp.company }}</div>
+                <ul class="experience-descriptions">
+                    {% for desc in exp.descriptions %}
+                        <li>{{ desc }}</li>
+                    {% endfor %}
+                </ul>
             </div>
         {% endfor %}
     </div>
