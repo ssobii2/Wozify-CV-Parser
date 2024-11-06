@@ -1,8 +1,12 @@
 import re
-from typing import Dict, List
+from typing import List
+import spacy
+from langdetect import detect, LangDetectException
 
 class SkillsExtractor:
-    def __init__(self):
+    def __init__(self, nlp_en, nlp_hu):
+        self.nlp_en = nlp_en
+        self.nlp_hu = nlp_hu
         self.section_headers = {
             'skills': ['skills', 'technical skills', 'competencies', 'expertise', 'technologies']
         }
@@ -20,6 +24,14 @@ class SkillsExtractor:
             'git', 'jira', 'confluence', 'slack', 'vscode', 'intellij', 'eclipse',
             'postman', 'webpack', 'npm', 'yarn'
         ]
+
+    def get_nlp_model_for_text(self, text: str):
+        """Determine the language of the text and return the appropriate spaCy NLP model."""
+        try:
+            language = detect(text)
+            return self.nlp_hu if language == 'hu' else self.nlp_en
+        except LangDetectException:
+            return self.nlp_en
 
     def extract_section(self, text: str, section_keywords: List[str]) -> List[str]:
         """Extract a section from text based on keywords."""
@@ -59,15 +71,23 @@ class SkillsExtractor:
         return section_lines
 
     def extract_skills(self, text: str) -> List[str]:
-        """Extract skills from text."""
-        skills = []
+        """Extract skills from text using NLP and fallback to static list."""
+        skills = set()
         
-        # Extract skills section
-        skills_section = self.extract_section(text, self.section_headers['skills'])
+        # Use NLP to extract skills
+        nlp = self.get_nlp_model_for_text(text)
+        doc = nlp(text)
         
-        # Extract skills from the entire text to catch skills mentioned elsewhere
-        for skill in self.skills:
-            if re.search(r'\b' + skill + r'\b', text, re.IGNORECASE):
-                skills.append(skill)
+        # Use spaCy's NER to find skill entities
+        for ent in doc.ents:
+            if ent.label_ == 'SKILL':
+                skills.add(ent.text.lower())
         
-        return sorted(set(skills)) 
+        # Fallback to static list if no skills found
+        if not skills:
+            skills_section = self.extract_section(text, self.section_headers['skills'])
+            for skill in self.skills:
+                if re.search(r'\b' + skill + r'\b', text, re.IGNORECASE):
+                    skills.add(skill)
+        
+        return sorted(skills)

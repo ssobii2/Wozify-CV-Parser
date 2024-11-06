@@ -20,9 +20,9 @@ class CVExtractor:
         self.profile_extractor = ProfileExtractor(nlp_en, nlp_hu)
         self.education_extractor = EducationExtractor(nlp_en, nlp_hu)
         self.experience_extractor = ExperienceExtractor(nlp_en, nlp_hu)
-        self.skills_extractor = SkillsExtractor()
-        self.language_extractor = LanguageExtractor()
-        self.current_position_extractor = CurrentPositionExtractor()
+        self.skills_extractor = SkillsExtractor(nlp_en, nlp_hu)
+        self.language_extractor = LanguageExtractor(nlp_en, nlp_hu)
+        self.current_position_extractor = CurrentPositionExtractor(nlp_en, nlp_hu)
         
         # Define date patterns for date extraction
         self.date_patterns = [
