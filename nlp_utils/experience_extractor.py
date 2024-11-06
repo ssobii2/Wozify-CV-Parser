@@ -76,6 +76,20 @@ class ExperienceExtractor:
         if date_entities:
             return ' to '.join(date_entities)
 
+        # Fallback to regex for date ranges
+        date_patterns = [
+            r'(?:19|20)\d{2}',  # Year
+            r'\d{2}\.\d{2}\.\d{4}',  # Hungarian format
+            r'\d{4}/\d{2}/\d{2}',  # Alternative format
+            r'\d{2}/\d{2}/\d{4}'   # Alternative format
+        ]
+
+        # Attempt to find date ranges using regex
+        for pattern in date_patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            if matches:
+                return ' to '.join(matches)
+
         return None
 
     def is_likely_company(self, text: str) -> bool:
@@ -275,3 +289,22 @@ class ExperienceExtractor:
                 work_data.append(current_entry)
         
         return work_data
+
+    def extract_experience_descriptions(self, text: str) -> List[str]:
+        """Extract detailed experience descriptions using NLP and dependency parsing."""
+        nlp = self.get_nlp_model_for_text(text)
+        doc = nlp(text)
+        descriptions = []
+
+        for sent in doc.sents:
+            # Use dependency parsing to find verbs related to work activities
+            for token in sent:
+                if token.dep_ in {'ROOT', 'advcl', 'xcomp'} and token.lemma_ in {'develop', 'manage', 'lead', 'design', 'implement', 'create', 'improve', 'optimize', 'coordinate'}:
+                    descriptions.append(sent.text.strip())
+                    break
+
+            # Check for entities that are typically associated with work experience
+            if any(ent.label_ in {'ORG', 'DATE', 'PERSON', 'GPE'} for ent in sent.ents):
+                descriptions.append(sent.text.strip())
+
+        return descriptions

@@ -13,12 +13,12 @@ from typing import Dict, List, Optional, Tuple
 
 # Load English and Hungarian models
 nlp_en = spacy.load('en_core_web_sm')
-nlp_hu = spacy.load('hu_core_news_lg')
+nlp_hu = spacy.load('hu_core_news_md')
 
 class CVExtractor:
     def __init__(self):
         self.profile_extractor = ProfileExtractor(nlp_en, nlp_hu)
-        self.education_extractor = EducationExtractor()
+        self.education_extractor = EducationExtractor(nlp_en, nlp_hu)
         self.experience_extractor = ExperienceExtractor(nlp_en, nlp_hu)
         self.skills_extractor = SkillsExtractor()
         self.language_extractor = LanguageExtractor()

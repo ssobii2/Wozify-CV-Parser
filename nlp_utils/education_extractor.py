@@ -1,8 +1,12 @@
 import re
 from typing import Dict, List, Optional
+import spacy
+from langdetect import detect, LangDetectException
 
 class EducationExtractor:
-    def __init__(self):
+    def __init__(self, nlp_en, nlp_hu):
+        self.nlp_en = nlp_en
+        self.nlp_hu = nlp_hu
         # Constants for both English and Hungarian keywords
         self.SCHOOLS = [
             # English
@@ -22,6 +26,11 @@ class EducationExtractor:
         self.section_headers = {
             'education': ['education', 'academic background', 'qualifications', 'academic qualifications']
         }
+
+        self.education_keywords = [
+            'university', 'college', 'institute', 'school', 'academy', 'degree', 'bachelor', 'master', 'phd', 'gpa',
+            'coursework', 'course', 'program', 'diploma', 'certification', 'training'
+        ]
 
     def extract_section(self, text: str, section_keywords: List[str]) -> List[str]:
         """Extract a section from text based on keywords."""
@@ -60,15 +69,55 @@ class EducationExtractor:
         
         return section_lines
 
+    def get_nlp_model_for_text(self, text: str):
+        """Determine the language of the text and return the appropriate spaCy NLP model."""
+        try:
+            language = detect(text)
+            return self.nlp_hu if language == 'hu' else self.nlp_en
+        except LangDetectException:
+            return self.nlp_en
+
     def has_school(self, text: str) -> bool:
+        # Use spaCy to perform NER with the appropriate language model
+        nlp = self.get_nlp_model_for_text(text)
+        doc = nlp(text)
+        for ent in doc.ents:
+            if ent.label_ == {'ORG', 'FAC', 'GPE', 'LOC'}:  # Check if the entity is an organization
+                return True
+        
+        # Fallback to the original logic
         return any(school.lower() in text.lower() for school in self.SCHOOLS)
     
     def has_degree(self, text: str) -> bool:
-        return any(degree.lower() in text.lower() for degree in self.DEGREES) or \
-               bool(re.match(r'[ABM][A-Z\.]', text))
+        # Use spaCy to perform NER with the appropriate language model
+        nlp = self.get_nlp_model_for_text(text)
+        doc = nlp(text)
+        for ent in doc.ents:
+            if ent.label_ == "EDUCATION":  # Check if the entity is related to education
+                return True
+        
+        # Check for exact matches of degree names
+        degree_pattern = r'\b(?:' + '|'.join(re.escape(degree) for degree in self.DEGREES) + r')\b'
+        if re.search(degree_pattern, text, re.IGNORECASE):
+            return True
+        
+        # Check for common degree abbreviations
+        if re.search(r'\b(?:B\.?A\.?|B\.?S\.?|M\.?A\.?|M\.?S\.?|Ph\.?D\.?)\b', text, re.IGNORECASE):
+            return True
+        
+        return False
     
     def extract_gpa(self, text: str) -> Optional[str]:
-        # Support both English and Hungarian grade formats
+        # Use spaCy to process the text
+        nlp = self.get_nlp_model_for_text(text)
+        doc = nlp(text)
+        
+        # Attempt to find GPA using spaCy's NER
+        for ent in doc.ents:
+            if ent.label_ == "CARDINAL" and re.match(r'^[0-5]\.\d{1,2}$', ent.text):
+                return ent.text
+        
+        # Fallback to regex for GPA and grades
         gpa_match = re.search(r'GPA:?\s*([\d\.]+)', text, re.IGNORECASE)
         grade_match = re.search(r'(?:Note|Jegy|Minősítés):\s*([\w]+)', text, re.IGNORECASE)
         
@@ -87,10 +136,22 @@ class EducationExtractor:
                 'közepes': '3.0'
             }
             return grade_map.get(grade.lower(), grade)
+        
         return None
     
     def extract_date(self, text: str) -> Optional[str]:
-        # Support both English and Hungarian date formats
+        # Use spaCy to process the text
+        nlp = self.get_nlp_model_for_text(text)
+        doc = nlp(text)
+        
+        # Attempt to find dates using spaCy's NER
+        for ent in doc.ents:
+            if ent.label_ == "DATE":
+                # Extract just the year if it's a full date
+                year_match = re.search(r'(19|20)\d{2}', ent.text)
+                return year_match.group(0) if year_match else ent.text
+        
+        # Fallback to regex for date formats
         date_patterns = [
             r'(?:19|20)\d{2}',  # Year
             r'\d{2}\.\d{2}\.\d{4}',  # Hungarian format
@@ -104,7 +165,27 @@ class EducationExtractor:
                 # Extract just the year if it's a full date
                 year = re.search(r'(19|20)\d{2}', match.group(0))
                 return year.group(0) if year else match.group(0)
+        
         return None
+
+    def extract_education_descriptions(self, text: str) -> List[str]:
+        """Extract detailed education descriptions using NLP and dependency parsing."""
+        nlp = self.get_nlp_model_for_text(text)
+        doc = nlp(text)
+        descriptions = []
+
+        for sent in doc.sents:
+            # Use dependency parsing to find verbs related to education
+            for token in sent:
+                if token.dep_ in {'ROOT', 'advcl', 'xcomp'} and token.lemma_ in {'study', 'graduate', 'complete', 'attend', 'enroll'}:
+                    descriptions.append(sent.text.strip())
+                    break
+
+            # Check for entities that are typically associated with education
+            if any(ent.label_ in {'ORG', 'DATE', 'PERSON'} for ent in sent.ents):
+                descriptions.append(sent.text.strip())
+
+        return descriptions
 
     def extract_education(self, text: str) -> List[Dict]:
         """Extract detailed education information."""
@@ -130,7 +211,7 @@ class EducationExtractor:
                         'degree': '',
                         'gpa': '',
                         'date': self.extract_date(line) or '',
-                        'descriptions': []
+                        'descriptions': self.extract_education_descriptions(line)
                     }
                     continue
                 
@@ -167,7 +248,7 @@ class EducationExtractor:
                 
                 # Add to descriptions
                 if line not in [current_entry['school'], current_entry['degree']]:
-                    current_entry['descriptions'].append(line)
+                    current_entry['descriptions'].extend(self.extract_education_descriptions(line))
             
             # Don't forget to add the last entry
             if current_entry and (current_entry['school'] or current_entry['degree']):
