@@ -146,7 +146,7 @@ class ExperienceExtractor:
         work_data = []
         current_entry = None
         
-        # Extract work experience section
+        # Updated regex pattern to capture the new format
         work_pattern = r'(?:WORK\s*EXPERIENCE|EXPERIENCE|EMPLOYMENT|PROFESSIONAL\s*BACKGROUND|WORK\s*HISTORY|MUNKATAPASZTALAT|SZAKMAI\s*TAPASZTALAT).*?(?=\n\s*(?:EDUCATION|SKILLS|PROJECTS|LANGUAGES|CERTIFICATIONS|INTERESTS|TANULMÁNYOK|KÉSZSÉGEK|PROJEKTEK|NYELVEK|$))'
         work_match = re.search(work_pattern, text, re.DOTALL | re.IGNORECASE)
         
@@ -174,15 +174,17 @@ class ExperienceExtractor:
                         'descriptions': []
                     }
                     
-                    # Look at surrounding lines for job title and company
+                    # Look for company and job title in the next lines
                     for j in range(max(0, i-2), i):
                         prev_line = lines[j].strip()
                         if not current_entry['job_title'] and self.is_likely_job_title(prev_line):
                             current_entry['job_title'] = prev_line
                         elif not current_entry['company'] and self.is_likely_company(prev_line):
-                            current_entry['company'] = prev_line
+                            # Clean the company name by stripping dashes or bullet points
+                            current_entry['company'] = prev_line.lstrip('-•* ')
                         elif not current_entry['company'] and self.is_valid_company_structure(prev_line):
-                            current_entry['company'] = prev_line
+                            # Clean the company name by stripping dashes or bullet points
+                            current_entry['company'] = prev_line.lstrip('-•* ')
                     continue
                 
                 if current_entry:
@@ -191,7 +193,16 @@ class ExperienceExtractor:
                     doc = nlp(line)
                     for sent in doc.sents:
                         if self.is_relevant_description(sent.text):
-                            current_entry['descriptions'].append(sent.text)
+                            # Strip bullet points or dashes from the description
+                            clean_description = sent.text.strip().lstrip('-•* ')
+                            if clean_description:  # Check if the description is not empty
+                                current_entry['descriptions'].append(clean_description)
+                    
+                    # Handle bullet points
+                    if line.startswith(('-', '•', '*')) or re.match(r'^\d+\.', line):
+                        clean_description = line.strip().lstrip('-•* ')
+                        if clean_description:  # Check if the description is not empty
+                            current_entry['descriptions'].append(clean_description)
             
             # Add the last entry
             if current_entry and current_entry.get('descriptions'):

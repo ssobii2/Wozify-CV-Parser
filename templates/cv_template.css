@@ -1,12 +1,13 @@
 @page {
     margin: 0;
     size: A4;
+    min-height: 371mm;
 }
 body {
     margin: 0;
     font-family: Arial, sans-serif;
     display: flex;
-    height: 371mm;
+    min-height: 100vh;
 }
 .left-sidebar {
     background-color: #002B5B;
@@ -16,6 +17,8 @@ body {
     box-sizing: border-box;
     min-height: 371mm;
     position: fixed;
+    top: 0;
+    bottom: 0;
 }
 .main-content {
     width: 70%;
@@ -24,9 +27,9 @@ body {
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    justify-content: flex-start;
     align-items: center;
-    min-height: 371mm;
+    min-height: 100vh;
 }
 .logo {
     display: block;

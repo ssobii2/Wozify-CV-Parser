@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
 # Load English and Hungarian models
+spacy.prefer_gpu()
 nlp_en = spacy.load('en_core_web_sm')
 nlp_hu = spacy.load('hu_core_news_md')
 

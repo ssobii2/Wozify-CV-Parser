@@ -81,13 +81,13 @@ class SkillsExtractor:
         # Use spaCy's NER to find skill entities
         for ent in doc.ents:
             if ent.label_ == 'SKILL':
-                skills.add(ent.text.lower())
+                skills.add(ent.text.capitalize())
         
         # Fallback to static list if no skills found
         if not skills:
             skills_section = self.extract_section(text, self.section_headers['skills'])
             for skill in self.skills:
                 if re.search(r'\b' + skill + r'\b', text, re.IGNORECASE):
-                    skills.add(skill)
+                    skills.add(skill.capitalize())
         
         return sorted(skills)
