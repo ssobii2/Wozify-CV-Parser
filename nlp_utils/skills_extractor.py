@@ -87,7 +87,62 @@ class SkillsExtractor:
         if not skills:
             skills_section = self.extract_section(text, self.section_headers['skills'])
             for skill in self.skills:
+                # Check for both the skill name and common abbreviations
                 if re.search(r'\b' + skill + r'\b', text, re.IGNORECASE):
                     skills.add(skill.capitalize())
+                # Add checks for common abbreviations
+                if skill in self.abbreviations:
+                    abbreviation = self.abbreviations[skill]
+                    if re.search(r'\b' + abbreviation + r'\b', text, re.IGNORECASE):
+                        skills.add(skill.capitalize())
         
         return sorted(skills)
+
+    # Add a dictionary for common skill abbreviations
+    @property
+    def abbreviations(self):
+        return {
+            'SQL': 'SQL',
+            'Java': 'Java',
+            'C++': 'C++',
+            'JavaScript': 'JS',
+            'Python': 'Py',
+            'HTML': 'HTML',
+            'CSS': 'CSS',
+            'PHP': 'PHP',
+            'C#': 'C#',
+            'Ruby': 'Ruby',
+            'Go': 'Go',
+            'Swift': 'Swift',
+            'Kotlin': 'Kotlin',
+            'Rust': 'Rust',
+            'TypeScript': 'TS',
+            'Scala': 'Scala',
+            'Perl': 'Perl',
+            'R': 'R',
+            'Django': 'Django',
+            'Flask': 'Flask',
+            'React': 'React',
+            'Angular': 'Angular',
+            'Vue': 'Vue',
+            'Node.js': 'Node',
+            'Docker': 'Docker',
+            'Kubernetes': 'K8s',
+            'AWS': 'AWS',
+            'Azure': 'Azure',
+            'GCP': 'GCP',
+            'Terraform': 'Terraform',
+            'Ansible': 'Ansible',
+            'Jenkins': 'Jenkins',
+            'Git': 'Git',
+            'GitLab': 'GitLab',
+            'CircleCI': 'CircleCI',
+            'PostgreSQL': 'PostgreSQL',
+            'MongoDB': 'MongoDB',
+            'MySQL': 'MySQL',
+            'SQLite': 'SQLite',
+            'Redis': 'Redis',
+            'Elasticsearch': 'Elasticsearch',
+            'Cassandra': 'Cassandra',
+            'DynamoDB': 'DynamoDB',
+        }

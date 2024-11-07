@@ -32,6 +32,17 @@ class EducationExtractor:
             'coursework', 'course', 'program', 'diploma', 'certification', 'training'
         ]
 
+        self.date_patterns = [
+            r'(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?) \d{4}',
+            r'\d{1,2}/\d{1,2}/\d{2,4}',
+            r'\d{4}',
+            r'\d{2}\.\d{2}\.\d{4}',
+            r'\d{4}/\d{2}/\d{2}',
+            r'\d{2}/\d{2}/\d{4}',
+            r'(Summer|Fall|Winter|Spring) \d{4}',
+            r'\d{1,2} (?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?),? \d{4}'
+        ]
+
     def extract_section(self, text: str, section_keywords: List[str]) -> List[str]:
         """Extract a section from text based on keywords."""
         lines = text.split('\n')
@@ -140,32 +151,33 @@ class EducationExtractor:
         return None
     
     def extract_date(self, text: str) -> Optional[str]:
-        # Use spaCy to process the text
         nlp = self.get_nlp_model_for_text(text)
         doc = nlp(text)
-        
-        # Attempt to find dates using spaCy's NER
         for ent in doc.ents:
             if ent.label_ == "DATE":
-                # Extract just the year if it's a full date
                 year_match = re.search(r'(19|20)\d{2}', ent.text)
                 return year_match.group(0) if year_match else ent.text
-        
-        # Fallback to regex for date formats
-        date_patterns = [
-            r'(?:19|20)\d{2}',  # Year
-            r'\d{2}\.\d{2}\.\d{4}',  # Hungarian format
-            r'\d{4}/\d{2}/\d{2}',  # Alternative format
-            r'\d{2}/\d{2}/\d{4}'   # Alternative format
-        ]
-        
-        for pattern in date_patterns:
+
+        for pattern in self.date_patterns:
             match = re.search(pattern, text)
             if match:
-                # Extract just the year if it's a full date
                 year = re.search(r'(19|20)\d{2}', match.group(0))
                 return year.group(0) if year else match.group(0)
-        
+
+        return None
+
+    def extract_date_range(self, text: str) -> Optional[str]:
+        nlp = self.get_nlp_model_for_text(text)
+        doc = nlp(text)
+        date_entities = [ent.text for ent in doc.ents if ent.label_ == 'DATE']
+        if date_entities:
+            return ' to '.join(date_entities)
+
+        for pattern in self.date_patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            if matches:
+                return ' to '.join(matches)
+
         return None
 
     def extract_education_descriptions(self, text: str) -> List[str]:
@@ -174,16 +186,25 @@ class EducationExtractor:
         doc = nlp(text)
         descriptions = []
 
+        # Define action verbs related to education
+        action_verbs = {'study', 'graduate', 'complete', 'attend', 'enroll', 'achieve', 'earn', 'obtain'}
+
         for sent in doc.sents:
             # Use dependency parsing to find verbs related to education
             for token in sent:
-                if token.dep_ in {'ROOT', 'advcl', 'xcomp'} and token.lemma_ in {'study', 'graduate', 'complete', 'attend', 'enroll'}:
+                if token.dep_ in {'ROOT', 'advcl', 'xcomp'} and token.lemma_ in action_verbs:
                     descriptions.append(sent.text.strip())
                     break
 
             # Check for entities that are typically associated with education
             if any(ent.label_ in {'ORG', 'DATE', 'PERSON'} for ent in sent.ents):
                 descriptions.append(sent.text.strip())
+
+            # Handle bullet points and numbered lists
+            if re.match(r'^[•*-]\s*', sent.text) or re.match(r'^\d+\.', sent.text):
+                clean_description = sent.text.strip().lstrip('-•* ')
+                if clean_description:  # Check if the description is not empty
+                    descriptions.append(clean_description)
 
         return descriptions
 

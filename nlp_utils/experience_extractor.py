@@ -8,16 +8,41 @@ class ExperienceExtractor:
         self.nlp_en = nlp_en
         self.nlp_hu = nlp_hu
         self.section_headers = {
-            'experience': ['experience', 'work experience', 'employment history', 'work history', 'professional experience']
+            'experience': [
+                'experience', 'work experience', 'employment history', 'work history', 
+                'professional experience', 'job experience', 'career history', 
+                'previous employment', 'past roles', 'work background', 'employment record',
+                'munkatapasztalat', 'szakmai tapasztalat', 'munkatörténet', 'korábbi munkák'
+            ]
         }
         
-        self.job_indicators = [
-            'developer', 'engineer', 'manager', 'consultant', 'analyst', 
-            'specialist', 'coordinator', 'assistant', 'director', 'lead',
-            'intern', 'trainee', 'administrator', 'supervisor'
-        ]
+        self.job_indicators = {
+            'en': [
+                'developer', 'engineer', 'manager', 'consultant', 'analyst', 
+                'specialist', 'coordinator', 'assistant', 'director', 'lead',
+                'intern', 'trainee', 'administrator', 'supervisor'
+            ],
+            'hu': [
+                'fejlesztő', 'mérnök', 'menedzser', 'tanácsadó', 'elemző', 
+                'szakértő', 'koordinátor', 'asszisztens', 'igazgató', 'vezető',
+                'gyakornok', 'képzés alatt álló', 'adminisztrátor', 'felügyelő'
+            ]
+        }
         
         self.company_indicators = ['inc', 'ltd', 'llc', 'corp', 'gmbh', 'kft', 'zrt', 'bt', 'nyrt']
+
+        # Define date patterns for date extraction
+        self.date_patterns = [
+            r'(Jan(?:uary)? \d{4} - (?:Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?) \d{4})',  # Jan 2014 - Feb 2015
+            r'(Summer|Fall|Winter|Spring) \d{4}',  # Summer 2012
+            r'\d{1,2} (?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?),? \d{4}',  # 1 January, 2014
+            r'\d{1,2}/\d{1,2}/\d{2,4}',  # MM/DD/YYYY or DD/MM/YYYY
+            r'\d{4}-\d{2}-\d{2}',  # YYYY-MM-DD
+            r'\d{4}',  # Year only
+            r'\d{2}\.\d{2}\.\d{4}',  # Hungarian format
+            r'\d{4}/\d{2}/\d{2}',  # Alternative format
+            r'\d{2}/\d{2}/\d{4}'   # Alternative format
+        ]
 
     def get_nlp_model_for_text(self, text: str):
         """Determine the language of the text and return the appropriate spaCy NLP model."""
@@ -28,13 +53,17 @@ class ExperienceExtractor:
             return self.nlp_en
 
     def extract_section(self, text: str, section_keywords: List[str]) -> List[str]:
-        """Extract a section from text based on keywords."""
+        """Extract a section from text based on keywords and NLP context."""
         lines = text.split('\n')
         section_lines = []
         in_section = False
         
-        for i, line in enumerate(lines):
-            line = line.strip()
+        # Use NLP model to process the text
+        nlp = self.get_nlp_model_for_text(text)
+        doc = nlp(text)
+
+        for sent in doc.sents:
+            line = sent.text.strip()
             
             # Skip empty lines
             if not line:
@@ -45,11 +74,11 @@ class ExperienceExtractor:
             
             # Check if next line is a different section
             is_next_different_section = False
-            if i < len(lines) - 1:
-                next_line = lines[i + 1].strip()
+            if sent.nbor(1) is not None:  # Check if there is a next sentence
+                next_line = sent.nbor(1).text.strip()
                 is_next_different_section = any(
                     keyword in next_line.lower() 
-                    for keyword in ['education', 'skills', 'projects', 'languages']
+                    for keyword in ['education', 'skills', 'projects', 'languages', 'oktatás', 'készségek', 'projektek', 'nyelvek']
                 )
             
             if is_section_header:
@@ -76,19 +105,11 @@ class ExperienceExtractor:
         if date_entities:
             return ' to '.join(date_entities)
 
-        # Fallback to regex for date ranges
-        date_patterns = [
-            r'(?:19|20)\d{2}',  # Year
-            r'\d{2}\.\d{2}\.\d{4}',  # Hungarian format
-            r'\d{4}/\d{2}/\d{2}',  # Alternative format
-            r'\d{2}/\d{2}/\d{4}'   # Alternative format
-        ]
-
         # Attempt to find date ranges using regex
-        for pattern in date_patterns:
+        for pattern in self.date_patterns:
             matches = re.findall(pattern, text, re.IGNORECASE)
             if matches:
-                return ' to '.join(matches)
+                return ' to '.join(matches)  # Return the raw matches without normalization
 
         return None
 
@@ -116,14 +137,12 @@ class ExperienceExtractor:
             return True
 
         return False
-    
+
     def is_valid_company_structure(self, text: str) -> bool:
         """Check if the text has a valid company name structure."""
-        # Determine the language and use the appropriate spaCy model
         nlp = self.get_nlp_model_for_text(text)
         doc = nlp(text)
 
-        # Check if the text starts with a capital letter
         if text[0].isupper():
             # Check for the presence of verbs or prepositions which are unlikely in company names
             for token in doc:
@@ -139,7 +158,8 @@ class ExperienceExtractor:
 
     def is_likely_job_title(self, text: str) -> bool:
         """Check if text is likely a job title."""
-        return any(indicator in text.lower() for indicator in self.job_indicators)
+        return any(indicator in text.lower() for indicator in self.job_indicators['en']) or \
+               any(indicator in text.lower() for indicator in self.job_indicators['hu'])
 
     def extract_work_experience(self, text: str) -> List[Dict]:
         """Extract detailed work experience information."""
@@ -174,16 +194,18 @@ class ExperienceExtractor:
                         'descriptions': []
                     }
                     
-                    # Look for company and job title in the next lines
+                    # First pass: Look for job titles
                     for j in range(max(0, i-2), i):
                         prev_line = lines[j].strip()
                         if not current_entry['job_title'] and self.is_likely_job_title(prev_line):
                             current_entry['job_title'] = prev_line
-                        elif not current_entry['company'] and self.is_likely_company(prev_line):
-                            # Clean the company name by stripping dashes or bullet points
+                    
+                    # Second pass: Look for companies
+                    for j in range(max(0, i-2), i):
+                        prev_line = lines[j].strip()
+                        if not current_entry['company'] and self.is_likely_company(prev_line):
                             current_entry['company'] = prev_line.lstrip('-•* ')
                         elif not current_entry['company'] and self.is_valid_company_structure(prev_line):
-                            # Clean the company name by stripping dashes or bullet points
                             current_entry['company'] = prev_line.lstrip('-•* ')
                     continue
                 
@@ -191,15 +213,15 @@ class ExperienceExtractor:
                     # New approach: Use NLP and context to extract descriptions
                     nlp = self.get_nlp_model_for_text(line)
                     doc = nlp(line)
-                    for sent in doc.sents:
-                        if self.is_relevant_description(sent.text):
-                            # Strip bullet points or dashes from the description
-                            clean_description = sent.text.strip().lstrip('-•* ')
-                            if clean_description:  # Check if the description is not empty
-                                current_entry['descriptions'].append(clean_description)
                     
-                    # Handle bullet points
-                    if line.startswith(('-', '•', '*')) or re.match(r'^\d+\.', line):
+                    # Use sentence boundaries to extract individual sentences
+                    for sent in doc.sents:
+                        clean_description = sent.text.strip().lstrip('-•* ')
+                        if self.is_relevant_description(clean_description):
+                            current_entry['descriptions'].append(clean_description)
+                    
+                    # Handle bullet points and numbered lists
+                    if re.match(r'^[•*-]\s*', line) or re.match(r'^\d+\.', line):
                         clean_description = line.strip().lstrip('-•* ')
                         if clean_description:  # Check if the description is not empty
                             current_entry['descriptions'].append(clean_description)
@@ -231,8 +253,6 @@ class ExperienceExtractor:
 
     def is_relevant_description(self, text: str) -> bool:
         """Determine if a sentence is a relevant work experience description."""
-        # Implement logic to determine if a sentence is relevant
-        # For example, check if it contains action verbs or specific keywords
         action_verbs = {'developed', 'managed', 'led', 'designed', 'implemented', 'created', 'improved', 'optimized'}
         return any(verb in text.lower() for verb in action_verbs)
 
@@ -300,22 +320,3 @@ class ExperienceExtractor:
                 work_data.append(current_entry)
         
         return work_data
-
-    def extract_experience_descriptions(self, text: str) -> List[str]:
-        """Extract detailed experience descriptions using NLP and dependency parsing."""
-        nlp = self.get_nlp_model_for_text(text)
-        doc = nlp(text)
-        descriptions = []
-
-        for sent in doc.sents:
-            # Use dependency parsing to find verbs related to work activities
-            for token in sent:
-                if token.dep_ in {'ROOT', 'advcl', 'xcomp'} and token.lemma_ in {'develop', 'manage', 'lead', 'design', 'implement', 'create', 'improve', 'optimize', 'coordinate'}:
-                    descriptions.append(sent.text.strip())
-                    break
-
-            # Check for entities that are typically associated with work experience
-            if any(ent.label_ in {'ORG', 'DATE', 'PERSON', 'GPE'} for ent in sent.ents):
-                descriptions.append(sent.text.strip())
-
-        return descriptions

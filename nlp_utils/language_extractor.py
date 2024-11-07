@@ -111,20 +111,15 @@ class LanguageExtractor:
         for ent in doc.ents:
             if ent.label_ == 'LANGUAGE':
                 language = ent.text.lower()
-                # Check for proficiency in the same sentence
-                proficiency = ''
-                for sent in doc.sents:
-                    if language in sent.text.lower():
-                        for level in self.proficiency_levels:
-                            if level in sent.text.lower():
-                                proficiency = level
-                                break
-                if language not in found_languages:
-                    languages.append({
-                        'language': language.title(),
-                        'proficiency': proficiency
-                    })
-                    found_languages.add(language)
+                # Check against predefined list of languages
+                if language in self.predefined_languages:
+                    proficiency = self.extract_proficiency_from_context(doc, language)
+                    if language not in found_languages:
+                        languages.append({
+                            'language': language.title(),
+                            'proficiency': proficiency
+                        })
+                        found_languages.add(language)
 
         # Always run the fallback logic to catch any missed languages
         languages_section = self.extract_section(text, self.section_headers['languages'])
@@ -135,8 +130,8 @@ class LanguageExtractor:
                 language = language.lower()
                 proficiency = proficiency.lower()
                 
-                # Check both English and Hungarian language names
-                if (language in self.known_languages or language in self.known_languages.values()) and \
+                # Check against predefined list of languages
+                if language in self.predefined_languages and \
                    any(level in proficiency for level in self.proficiency_levels) and \
                    language not in found_languages:
                     languages.append({
@@ -161,3 +156,50 @@ class LanguageExtractor:
             'language': '',
             'proficiency': ''
         }]
+    
+    @property
+    def predefined_languages(self):
+        """A predefined list of languages with their ISO codes."""
+        return {
+            'english': 'en',
+            'hungarian': 'hu',
+            'german': 'de',
+            'french': 'fr',
+            'spanish': 'es',
+            'italian': 'it',
+            'russian': 'ru',
+            'chinese': 'zh',
+            'japanese': 'ja',
+            'korean': 'ko',
+            'arabic': 'ar',
+            'hindi': 'hi',
+            'portuguese': 'pt',
+            'dutch': 'nl',
+            'polish': 'pl',
+            'turkish': 'tr',
+            'vietnamese': 'vi',
+            'thai': 'th',
+            'czech': 'cs',
+            'slovak': 'sk',
+            'romanian': 'ro',
+            'bulgarian': 'bg',
+            'croatian': 'hr',
+            'serbian': 'sr',
+            'ukrainian': 'uk',
+            'greek': 'el',
+            'swedish': 'sv',
+            'norwegian': 'no',
+            'danish': 'da',
+            'finnish': 'fi'
+        }
+    
+    def extract_proficiency_from_context(self, doc, language):
+        """Extract proficiency level from the context of the detected language."""
+        proficiency = ''
+        for sent in doc.sents:
+            if language in sent.text.lower():
+                for level in self.proficiency_levels:
+                    if level in sent.text.lower():
+                        proficiency = level
+                        break
+        return proficiency
