@@ -29,6 +29,16 @@ def test_generate_cv_and_json():
         "Abbasi_Resume.pdf",
         "Ussayed_Resume-Simple.pdf"
     ]
+
+    '''
+    test_files = [
+        "CV_HU_GuttmannAndras.docx.pdf",
+        "CV_HUN_Szomszed_Norbert.pdf",
+        "FP_CV_HUN.pdf",
+        "Richard-3.pdf",
+        "TothJozsef_CV_HU.pdf",
+    ]
+    '''
     
     output_dir = "outputs"
     os.makedirs(output_dir, exist_ok=True)
