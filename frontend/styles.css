@@ -1,12 +1,92 @@
-.container {
-    max-width: 800px;
-    margin: 0 auto;
-    padding: 20px;
+body {
+    margin: 50px;
+    overflow: hidden;
     font-family: Arial, sans-serif;
 }
 
-form {
-    margin: 20px 0;
+.container {
+    display: flex;
+    height: calc(100vh - 100px);
+}
+
+.form-container {
+    width: 50%;
+    padding: 20px;
+    box-sizing: border-box;
+    overflow-y: auto;
+    background-color: #f9f9f9;
+    border-right: 2px solid #ccc;
+}
+
+.iframe-container {
+    width: 50%;
+    padding: 20px;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+}
+
+.section {
+    background-color: #e9ecef;
+    padding: 15px;
+    margin-bottom: 20px;
+    border-radius: 5px;
+}
+
+h2 {
+    margin-top: 0;
+}
+
+.form-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.form-row label {
+    flex: 1;
+    margin-right: 10px;
+}
+
+.form-row input {
+    flex: 2;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+input[type="file"] {
+    padding: 5px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.editable {
+    flex: 2;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 8px;
+    min-height: 100px;
+    line-height: 1.5;
+    overflow-y: auto;
+    background-color: #FFFFFF;
+    position: relative;
+}
+
+.editable::before {
+    content: '• ';
+    margin-right: 5px;
+    display: inline-block;
+}
+
+.editable:focus {
+    outline: none;
 }
 
 button {

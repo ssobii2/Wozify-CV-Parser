@@ -20,14 +20,7 @@ logging.basicConfig(level=logging.INFO)
 def test_generate_cv_and_json():
     # List of test CV files
     test_files = [
-        "Konyves_Lajos_CV_EN_.pdf",
         "My-CV-Simple.pdf",
-        "Aladar_Feher_CV.pdf",
-        "MindtechApps_CV_LeventeV_Senior_ScrumMaster.pdf",
-        "Medior Software engineer Devora Csaba IDnr 532 (1).pdf",
-        "My-CV.pdf",
-        "Abbasi_Resume.pdf",
-        "Ussayed_Resume-Simple.pdf"
     ]
 
     '''

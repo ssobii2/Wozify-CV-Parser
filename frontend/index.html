@@ -7,12 +7,136 @@
 </head>
 <body>
     <div class="container">
-        <h1>Upload Your CV</h1>
-        <form id="upload-form">
-            <input type="file" id="file-input" name="file" accept=".pdf,.docx,.jpg,.jpeg,.png" required>
-            <button type="submit">Upload and Process</button>
-        </form>
-        <div id="result"></div>
+        <div class="form-container">
+            <h1>Upload Your CV</h1>
+            <form id="upload-form">
+                <div class="section">
+                    <h2>Upload CV</h2>
+                    <label for="file-input">Upload CV:</label>
+                    <input type="file" id="file-input" name="file" accept=".pdf,.docx,.jpg,.jpeg,.png">
+                    <button type="submit">Upload and Parse</button>
+                </div>
+                
+                <div class="section">
+                    <h2>Profile Information</h2>
+                    <div class="form-row">
+                        <label for="name">Name:</label>
+                        <input type="text" id="name" name="name">
+                    </div>
+                    <div class="form-row">
+                        <label for="email">Email:</label>
+                        <input type="email" id="email" name="email">
+                    </div>
+                    <div class="form-row">
+                        <label for="phone">Phone:</label>
+                        <input type="tel" id="phone" name="phone">
+                    </div>
+                    <div class="form-row">
+                        <label for="location">Location:</label>
+                        <input type="text" id="location" name="location">
+                    </div>
+                    <div class="form-row">
+                        <label for="url">URL:</label>
+                        <input type="url" id="url" name="url">
+                    </div>
+                    <div class="form-row">
+                        <label for="summary">Summary:</label>
+                        <div id="summary" class="editable" contenteditable="true" placeholder="• Your summary here..."></div>
+                    </div>
+                </div>
+                
+                <div class="section">
+                    <h2>Education</h2>
+                    <div id="education-container">
+                        <div class="education-entry">
+                            <div class="form-row">
+                                <label for="school">School:</label>
+                                <input type="text" name="school[]">
+                            </div>
+                            <div class="form-row">
+                                <label for="degree">Degree:</label>
+                                <input type="text" name="degree[]">
+                            </div>
+                            <div class="form-row">
+                                <label for="gpa">GPA:</label>
+                                <input type="text" name="gpa[]">
+                            </div>
+                            <div class="form-row">
+                                <label for="education-date">Date:</label>
+                                <input type="text" name="education-date[]">
+                            </div>
+                            <div class="form-row">
+                                <label for="education-descriptions">Descriptions:</label>
+                                <div name="education-descriptions[]" class="editable" contenteditable="true" placeholder="• Description here..."></div>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="button" id="add-education">Add More Education</button>
+                </div>
+                
+                <div class="section">
+                    <h2>Experience</h2>
+                    <div id="experience-container">
+                        <div class="experience-entry">
+                            <div class="form-row">
+                                <label for="company">Company:</label>
+                                <input type="text" name="company[]">
+                            </div>
+                            <div class="form-row">
+                                <label for="job-title">Job Title:</label>
+                                <input type="text" name="job-title[]">
+                            </div>
+                            <div class="form-row">
+                                <label for="experience-date">Date:</label>
+                                <input type="text" name="experience-date[]">
+                            </div>
+                            <div class="form-row">
+                                <label for="experience-descriptions">Descriptions:</label>
+                                <div name="experience-descriptions[]" class="editable" contenteditable="true" placeholder="• Description here..."></div>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="button" id="add-experience">Add More Experience</button>
+                </div>
+                
+                <div class="section">
+                    <h2>Skills</h2>
+                    <div class="form-row">
+                        <label for="skills">Skills (comma separated):</label>
+                        <input type="text" id="skills" name="skills">
+                    </div>
+                </div>
+                
+                <div class="section">
+                    <h2>Current Position</h2>
+                    <div class="form-row">
+                        <label for="current-position">Current Position:</label>
+                        <input type="text" id="current-position" name="current-position">
+                    </div>
+                </div>
+                
+                <div class="section">
+                    <h2>Languages</h2>
+                    <div id="languages-container">
+                        <div class="language-entry">
+                            <div class="form-row">
+                                <label for="language">Language:</label>
+                                <input type="text" name="language[]">
+                            </div>
+                            <div class="form-row">
+                                <label for="proficiency">Proficiency:</label>
+                                <input type="text" name="proficiency[]">
+                            </div>
+                        </div>
+                    </div>
+                    <button type="button" id="add-language">Add More Language</button>
+                </div>
+            </form>
+            <div id="result"></div>
+        </div>
+        <div class="iframe-container">
+            <iframe id="pdf-viewer" src="/static/demo.pdf" title="PDF Viewer"></iframe>
+        </div>
     </div>
     <script src="/static/script.js"></script>
 </body>
