@@ -53,12 +53,14 @@ h2 {
     margin-right: 10px;
 }
 
-.form-row input {
+.form-row input,
+.form-row textarea {
     flex: 2;
     padding: 8px;
     border: 1px solid #ccc;
     border-radius: 4px;
     font-size: 14px;
+    background-color: #FFFFFF;
 }
 
 input[type="file"] {
@@ -67,30 +69,15 @@ input[type="file"] {
     border-radius: 4px;
 }
 
-.editable {
-    flex: 2;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    padding: 8px;
+textarea {
     min-height: 100px;
     line-height: 1.5;
     overflow-y: auto;
-    background-color: #FFFFFF;
-    position: relative;
-}
-
-.editable::before {
-    content: '• ';
-    margin-right: 5px;
-    display: inline-block;
-}
-
-.editable:focus {
-    outline: none;
 }
 
 button {
     margin-top: 10px;
+    margin-bottom: 10px;
     padding: 8px 16px;
     background-color: #007bff;
     color: white;

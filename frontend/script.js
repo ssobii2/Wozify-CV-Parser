@@ -16,7 +16,7 @@ document.getElementById('upload-form').addEventListener('submit', function(e) {
         formData.append('degree[]', entry.querySelector('input[name="degree[]"]').value);
         formData.append('gpa[]', entry.querySelector('input[name="gpa[]"]').value);
         formData.append('education-date[]', entry.querySelector('input[name="education-date[]"]').value);
-        formData.append('education-descriptions[]', entry.querySelector('.editable[name="education-descriptions[]"]').innerText);
+        formData.append('education-descriptions[]', entry.querySelector('textarea[name="education-descriptions[]"]').value);
     });
 
     const experienceEntries = document.querySelectorAll('.experience-entry');
@@ -24,7 +24,7 @@ document.getElementById('upload-form').addEventListener('submit', function(e) {
         formData.append('company[]', entry.querySelector('input[name="company[]"]').value);
         formData.append('job-title[]', entry.querySelector('input[name="job-title[]"]').value);
         formData.append('experience-date[]', entry.querySelector('input[name="experience-date[]"]').value);
-        formData.append('experience-descriptions[]', entry.querySelector('.editable[name="experience-descriptions[]"]').innerText);
+        formData.append('experience-descriptions[]', entry.querySelector('textarea[name="experience-descriptions[]"]').value);
     });
 
     const languageEntries = document.querySelectorAll('.language-entry');
@@ -35,34 +35,6 @@ document.getElementById('upload-form').addEventListener('submit', function(e) {
 
     console.log('File selected:', file.name);
 });
-
-function initializeEditableDivs() {
-    const editableDivs = document.querySelectorAll('.editable');
-    editableDivs.forEach(div => {
-        div.innerHTML = '';
-        placeCaretAtEnd(div);
-        div.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                const currentContent = div.innerHTML;
-                div.innerHTML = currentContent + '<br>• ';
-                placeCaretAtEnd(div);
-            }
-        });
-    });
-}
-
-function placeCaretAtEnd(el) {
-    el.focus();
-    const range = document.createRange();
-    range.selectNodeContents(el);
-    range.collapse(false);
-    const sel = window.getSelection();
-    sel.removeAllRanges();
-    sel.addRange(range);
-}
-
-initializeEditableDivs();
 
 document.getElementById('add-education').addEventListener('click', function() {
     const educationContainer = document.getElementById('education-container');
@@ -87,17 +59,16 @@ document.getElementById('add-education').addEventListener('click', function() {
         </div>
         <div class="form-row">
             <label for="education-descriptions">Descriptions:</label>
-            <div class="editable" contenteditable="true" name="education-descriptions[]"></div>
+            <textarea name="education-descriptions[]" placeholder="Your description here..."></textarea>
         </div>
         <button type="button" class="remove-education">Remove</button>
     `;
     educationContainer.appendChild(newEducationEntry);
-    initializeEditableDivs();
 });
 
 document.getElementById('education-container').addEventListener('click', function(e) {
     if (e.target.classList.contains('remove-education')) {
-        e.target.parentElement.remove();
+        e.target.closest('.education-entry').remove();
     }
 });
 
@@ -120,17 +91,16 @@ document.getElementById('add-experience').addEventListener('click', function() {
         </div>
         <div class="form-row">
             <label for="experience-descriptions">Descriptions:</label>
-            <div class="editable" contenteditable="true" name="experience-descriptions[]"></div>
+            <textarea name="experience-descriptions[]" placeholder="Your description here..."></textarea>
         </div>
         <button type="button" class="remove-experience">Remove</button>
     `;
     experienceContainer.appendChild(newExperienceEntry);
-    initializeEditableDivs();
 });
 
 document.getElementById('experience-container').addEventListener('click', function(e) {
     if (e.target.classList.contains('remove-experience')) {
-        e.target.parentElement.remove();
+        e.target.closest('.experience-entry').remove();
     }
 });
 
@@ -154,6 +124,6 @@ document.getElementById('add-language').addEventListener('click', function() {
 
 document.getElementById('languages-container').addEventListener('click', function(e) {
     if (e.target.classList.contains('remove-language')) {
-        e.target.parentElement.remove();
+        e.target.closest('.language-entry').remove();
     }
 }); 
