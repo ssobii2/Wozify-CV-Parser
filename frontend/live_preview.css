@@ -1,46 +1,48 @@
-@page {
-    margin: 0;
-    size: A4;
-    min-height: 371mm;
-}
 body {
     margin: 0;
     font-family: Arial, sans-serif;
     display: flex;
     min-height: 100vh;
 }
+
+.container {
+    display: flex;
+    width: 100%;
+    overflow-y: auto;
+}
+
 .left-sidebar {
     background-color: #002B5B;
     color: white;
     width: 30%;
     padding: 15px;
     box-sizing: border-box;
-    min-height: 371mm;
-    position: fixed;
-    top: 0;
-    bottom: 0;
+    min-height: 100vh;
+    overflow-y: auto;
 }
+
 .main-content {
     width: 70%;
-    margin-left: 30%;
     padding: 15px;
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
-    align-items: center;
-    min-height: 100vh;
+    overflow-y: visible;
 }
+
 .logo {
     display: block;
     margin: 0 auto 30px;
     max-width: 100%;
 }
+
 .icon {
-    width: 32px;
-    height: 32px;
-    filter: brightness(0) invert(1);
+    width: 45px;
+    height: 45px;
+    color: #FF1F7D;
 }
+
 h2 {
     color: white;
     font-size: 20px;
@@ -48,16 +50,26 @@ h2 {
     align-items: center;
     gap: 10px;
 }
-.skills-list, .languages-list {
+
+.skills-list {
     list-style: none;
     padding: 0 0 0 10px;
     margin: 0;
     margin-left: 30px;
 }
-.skills-list li::before, .languages-list li::before {
+
+.languages-list {
+    list-style: none;
+    padding: 0 0 0 10px;
+    margin: 0;
+}
+
+.skills-list li::before,
+.languages-list li::before {
     content: "•";
     margin-right: 10px;
 }
+
 .section-header {
     background-color: #1F4B70;
     color: white;
@@ -72,48 +84,68 @@ h2 {
     width: 100%;
     box-sizing: border-box;
 }
-.cv-id, .job-title {
+
+.cv-id,
+.job-title {
     color: #FF1F7D;
-    margin: 0 0 20px;
     text-align: right;
+    display: block;
 }
+
 .cv-id {
     font-size: 24px;
     font-weight: bold;
 }
+
 .job-title {
     font-size: 28px;
 }
+
 .education-entry {
     margin-bottom: 20px;
 }
+
 .education-date {
     font-weight: bold;
     color: white;
 }
+
 .education-degree {
     font-weight: bold;
     color: white;
     margin-top: 5px;
 }
+
 .education-school {
     color: white;
     margin-top: 5px;
 }
+
 .experience-entry {
     margin-bottom: 20px;
 }
+
 .experience-date {
     font-weight: bold;
     color: black;
 }
+
 .experience-job-title {
     font-weight: bold;
     color: black;
     margin-top: 5px;
 }
+
 .experience-descriptions {
     list-style: disc;
     padding-left: 20px;
     margin-top: 5px;
+}
+
+.iframe-container {
+    width: 50%;
+    height: 100%;
+    padding: 20px;
+    box-sizing: border-box;
+    overflow: auto;
 }

@@ -1,46 +1,79 @@
-document.getElementById('upload-form').addEventListener('submit', function(e) {
-    e.preventDefault();
-    const fileInput = document.getElementById('file-input');
-    const file = fileInput.files[0];
-    if (!file) {
-        alert('Please select a file!');
-        return;
-    }
+document.getElementById("upload-form").addEventListener("submit", function (e) {
+  e.preventDefault();
+  const fileInput = document.getElementById("file-input");
+  const file = fileInput.files[0];
+  if (!file) {
+    alert("Please select a file!");
+    return;
+  }
 
-    const formData = new FormData();
-    formData.append('file', file);
+  const formData = new FormData();
+  formData.append("file", file);
 
-    const educationEntries = document.querySelectorAll('.education-entry');
-    educationEntries.forEach((entry) => {
-        formData.append('school[]', entry.querySelector('input[name="school[]"]').value);
-        formData.append('degree[]', entry.querySelector('input[name="degree[]"]').value);
-        formData.append('gpa[]', entry.querySelector('input[name="gpa[]"]').value);
-        formData.append('education-date[]', entry.querySelector('input[name="education-date[]"]').value);
-        formData.append('education-descriptions[]', entry.querySelector('textarea[name="education-descriptions[]"]').value);
-    });
+  // Process education entries
+  const educationEntries = document.querySelectorAll(".education-entry");
+  educationEntries.forEach((entry) => {
+    formData.append(
+      "school[]",
+      entry.querySelector('input[name="school[]"]').value
+    );
+    formData.append(
+      "degree[]",
+      entry.querySelector('input[name="degree[]"]').value
+    );
+    formData.append("gpa[]", entry.querySelector('input[name="gpa[]"]').value);
+    formData.append(
+      "education-date[]",
+      entry.querySelector('input[name="education-date[]"]').value
+    );
+    formData.append(
+      "education-descriptions[]",
+      entry.querySelector('textarea[name="education-descriptions[]"]').value
+    );
+  });
 
-    const experienceEntries = document.querySelectorAll('.experience-entry');
-    experienceEntries.forEach((entry) => {
-        formData.append('company[]', entry.querySelector('input[name="company[]"]').value);
-        formData.append('job-title[]', entry.querySelector('input[name="job-title[]"]').value);
-        formData.append('experience-date[]', entry.querySelector('input[name="experience-date[]"]').value);
-        formData.append('experience-descriptions[]', entry.querySelector('textarea[name="experience-descriptions[]"]').value);
-    });
+  // Process experience entries
+  const experienceEntries = document.querySelectorAll(".experience-entry");
+  experienceEntries.forEach((entry) => {
+    formData.append(
+      "company[]",
+      entry.querySelector('input[name="company[]"]').value
+    );
+    formData.append(
+      "job-title[]",
+      entry.querySelector('input[name="job-title[]"]').value
+    );
+    formData.append(
+      "experience-date[]",
+      entry.querySelector('input[name="experience-date[]"]').value
+    );
+    formData.append(
+      "experience-descriptions[]",
+      entry.querySelector('textarea[name="experience-descriptions[]"]').value
+    );
+  });
 
-    const languageEntries = document.querySelectorAll('.language-entry');
-    languageEntries.forEach((entry) => {
-        formData.append('language[]', entry.querySelector('input[name="language[]"]').value);
-        formData.append('proficiency[]', entry.querySelector('input[name="proficiency[]"]').value);
-    });
+  // Process language entries
+  const languageEntries = document.querySelectorAll(".language-entry");
+  languageEntries.forEach((entry) => {
+    formData.append(
+      "language[]",
+      entry.querySelector('input[name="language[]"]').value
+    );
+    formData.append(
+      "proficiency[]",
+      entry.querySelector('input[name="proficiency[]"]').value
+    );
+  });
 
-    console.log('File selected:', file.name);
+  console.log("File selected:", file.name);
 });
 
-document.getElementById('add-education').addEventListener('click', function() {
-    const educationContainer = document.getElementById('education-container');
-    const newEducationEntry = document.createElement('div');
-    newEducationEntry.classList.add('education-entry');
-    newEducationEntry.innerHTML = `
+function addEducationEntry() {
+  const educationContainer = document.getElementById("education-container");
+  const newEducationEntry = document.createElement("div");
+  newEducationEntry.classList.add("education-entry");
+  newEducationEntry.innerHTML = `
         <div class="form-row">
             <label for="school">School:</label>
             <input type="text" name="school[]">
@@ -63,20 +96,17 @@ document.getElementById('add-education').addEventListener('click', function() {
         </div>
         <button type="button" class="remove-education">Remove</button>
     `;
-    educationContainer.appendChild(newEducationEntry);
-});
+  newEducationEntry.querySelectorAll("input, textarea").forEach((input) => {
+    input.addEventListener("input", updatePreview);
+  });
+  educationContainer.appendChild(newEducationEntry);
+}
 
-document.getElementById('education-container').addEventListener('click', function(e) {
-    if (e.target.classList.contains('remove-education')) {
-        e.target.closest('.education-entry').remove();
-    }
-});
-
-document.getElementById('add-experience').addEventListener('click', function() {
-    const experienceContainer = document.getElementById('experience-container');
-    const newExperienceEntry = document.createElement('div');
-    newExperienceEntry.classList.add('experience-entry');
-    newExperienceEntry.innerHTML = `
+function addExperienceEntry() {
+  const experienceContainer = document.getElementById("experience-container");
+  const newExperienceEntry = document.createElement("div");
+  newExperienceEntry.classList.add("experience-entry");
+  newExperienceEntry.innerHTML = `
         <div class="form-row">
             <label for="company">Company:</label>
             <input type="text" name="company[]">
@@ -95,20 +125,17 @@ document.getElementById('add-experience').addEventListener('click', function() {
         </div>
         <button type="button" class="remove-experience">Remove</button>
     `;
-    experienceContainer.appendChild(newExperienceEntry);
-});
+  newExperienceEntry.querySelectorAll("input, textarea").forEach((input) => {
+    input.addEventListener("input", updatePreview);
+  });
+  experienceContainer.appendChild(newExperienceEntry);
+}
 
-document.getElementById('experience-container').addEventListener('click', function(e) {
-    if (e.target.classList.contains('remove-experience')) {
-        e.target.closest('.experience-entry').remove();
-    }
-});
-
-document.getElementById('add-language').addEventListener('click', function() {
-    const languagesContainer = document.getElementById('languages-container');
-    const newLanguageEntry = document.createElement('div');
-    newLanguageEntry.classList.add('language-entry');
-    newLanguageEntry.innerHTML = `
+function addLanguageEntry() {
+  const languagesContainer = document.getElementById("languages-container");
+  const newLanguageEntry = document.createElement("div");
+  newLanguageEntry.classList.add("language-entry");
+  newLanguageEntry.innerHTML = `
         <div class="form-row">
             <label for="language">Language:</label>
             <input type="text" name="language[]">
@@ -119,11 +146,45 @@ document.getElementById('add-language').addEventListener('click', function() {
         </div>
         <button type="button" class="remove-language">Remove</button>
     `;
-    languagesContainer.appendChild(newLanguageEntry);
-});
+  newLanguageEntry.querySelectorAll("input, textarea").forEach((input) => {
+    input.addEventListener("input", updatePreview);
+  });
+  languagesContainer.appendChild(newLanguageEntry);
+}
 
-document.getElementById('languages-container').addEventListener('click', function(e) {
-    if (e.target.classList.contains('remove-language')) {
-        e.target.closest('.language-entry').remove();
+document
+  .getElementById("add-education")
+  .addEventListener("click", addEducationEntry);
+document
+  .getElementById("add-experience")
+  .addEventListener("click", addExperienceEntry);
+document
+  .getElementById("add-language")
+  .addEventListener("click", addLanguageEntry);
+
+document
+  .getElementById("education-container")
+  .addEventListener("click", function (e) {
+    if (e.target.classList.contains("remove-education")) {
+      e.target.closest(".education-entry").remove();
+      updatePreview(); // Update preview after removal
     }
-}); 
+  });
+
+document
+  .getElementById("experience-container")
+  .addEventListener("click", function (e) {
+    if (e.target.classList.contains("remove-experience")) {
+      e.target.closest(".experience-entry").remove();
+      updatePreview(); // Update preview after removal
+    }
+  });
+
+document
+  .getElementById("languages-container")
+  .addEventListener("click", function (e) {
+    if (e.target.classList.contains("remove-language")) {
+      e.target.closest(".language-entry").remove();
+      updatePreview(); // Update preview after removal
+    }
+  });

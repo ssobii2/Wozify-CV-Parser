@@ -14,7 +14,7 @@ document.addEventListener("DOMContentLoaded", function () {
       .catch((error) => console.error("Error loading template:", error));
   }
 
-  function updatePreview() {
+  window.updatePreview = function() {
     fetchHtmlTemplate((html) => {
       const data = {
         skills: document.getElementById("skills").value,
@@ -54,6 +54,7 @@ document.addEventListener("DOMContentLoaded", function () {
       previewIframe.onload = () => {
         const iframeDocument =
           previewIframe.contentDocument || previewIframe.contentWindow.document;
+
         // Update content in iframe using IDs
         iframeDocument.getElementById("skills-list").innerHTML = (
           data.skills || ""
@@ -184,23 +185,36 @@ document.addEventListener("DOMContentLoaded", function () {
     const educationContainer = document.getElementById("education-container");
     educationContainer.innerHTML = "";
     data.education.forEach((edu, index) => {
-      const newEducationEntry = createEducationEntry(edu, index === 0); // Pass whether it's the first entry
+      const newEducationEntry = createEducationEntry(edu, index === 0);
       educationContainer.appendChild(newEducationEntry);
+      // Attach event listeners to dynamically created inputs
+      newEducationEntry.querySelectorAll("input, textarea").forEach((input) => {
+        input.addEventListener("input", updatePreview);
+      });
     });
 
     const experienceContainer = document.getElementById("experience-container");
     experienceContainer.innerHTML = "";
     data.experience.forEach((exp, index) => {
-      const newExperienceEntry = createExperienceEntry(exp, index === 0); // Pass whether it's the first entry
+      const newExperienceEntry = createExperienceEntry(exp, index === 0);
       experienceContainer.appendChild(newExperienceEntry);
+      // Attach event listeners to dynamically created inputs
+      newExperienceEntry
+        .querySelectorAll("input, textarea")
+        .forEach((input) => {
+          input.addEventListener("input", updatePreview);
+        });
     });
 
-    // Populate language entries
     const languagesContainer = document.getElementById("languages-container");
     languagesContainer.innerHTML = "";
     data.languages.forEach((lang, index) => {
-      const newLanguageEntry = createLanguageEntry(lang, index === 0); // Pass whether it's the first entry
+      const newLanguageEntry = createLanguageEntry(lang, index === 0);
       languagesContainer.appendChild(newLanguageEntry);
+      // Attach event listeners to dynamically created inputs
+      newLanguageEntry.querySelectorAll("input, textarea").forEach((input) => {
+        input.addEventListener("input", updatePreview);
+      });
     });
   }
 
@@ -238,6 +252,10 @@ document.addEventListener("DOMContentLoaded", function () {
                 : '<button type="button" class="remove-education">Remove</button>'
             }
         `;
+    // Attach auto-updating event listeners
+    entry.querySelectorAll("input, textarea").forEach((input) => {
+      input.addEventListener("input", updatePreview);
+    });
     return entry;
   }
 
@@ -275,6 +293,10 @@ document.addEventListener("DOMContentLoaded", function () {
                 : '<button type="button" class="remove-experience">Remove</button>'
             }
         `;
+    // Attach auto-updating event listeners
+    entry.querySelectorAll("input, textarea").forEach((input) => {
+      input.addEventListener("input", updatePreview);
+    });
     return entry;
   }
 
@@ -300,6 +322,10 @@ document.addEventListener("DOMContentLoaded", function () {
                 : '<button type="button" class="remove-language">Remove</button>'
             }
         `;
+    // Attach auto-updating event listeners
+    entry.querySelectorAll("input, textarea").forEach((input) => {
+      input.addEventListener("input", updatePreview);
+    });
     return entry;
   }
 
@@ -307,7 +333,8 @@ document.addEventListener("DOMContentLoaded", function () {
     .getElementById("education-container")
     .addEventListener("click", function (e) {
       if (e.target.classList.contains("remove-education")) {
-        e.target.closest(".education-entry").remove(); // Use closest to remove the specific entry
+        e.target.closest(".education-entry").remove();
+        updatePreview(); // Update preview after removal
       }
     });
 
@@ -315,7 +342,8 @@ document.addEventListener("DOMContentLoaded", function () {
     .getElementById("experience-container")
     .addEventListener("click", function (e) {
       if (e.target.classList.contains("remove-experience")) {
-        e.target.closest(".experience-entry").remove(); // Use closest to remove the specific entry
+        e.target.closest(".experience-entry").remove();
+        updatePreview(); // Update preview after removal
       }
     });
 
@@ -323,7 +351,8 @@ document.addEventListener("DOMContentLoaded", function () {
     .getElementById("languages-container")
     .addEventListener("click", function (e) {
       if (e.target.classList.contains("remove-language")) {
-        e.target.closest(".language-entry").remove(); // Use closest to remove the specific entry
+        e.target.closest(".language-entry").remove();
+        updatePreview(); // Update preview after removal
       }
     });
 });
