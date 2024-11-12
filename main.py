@@ -31,6 +31,7 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory="frontend"), name="frontend")
 # Mount the assets directory
 app.mount("/assets", StaticFiles(directory="assets"), name="assets")
+app.mount("/outputs", StaticFiles(directory="outputs"), name="outputs")
 
 # Configure pdfkit
 config = pdfkit.configuration(wkhtmltopdf=r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe')

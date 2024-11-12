@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', function() {
     const resultDiv = document.getElementById('result');
     const uploadForm = document.getElementById('upload-form');
+    const pdfViewer = document.getElementById('pdf-viewer');
 
     uploadForm.addEventListener('submit', function(e) {
         e.preventDefault();
@@ -15,7 +16,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const formData = new FormData();
         formData.append('file', file);
 
-        // Convert textarea content to unordered list format
         const educationEntries = document.querySelectorAll('.education-entry');
         educationEntries.forEach((entry) => {
             const descriptions = entry.querySelector('textarea[name="education-descriptions[]"]').value;
@@ -40,6 +40,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 resultDiv.innerText = `Error: ${data.error}`;
             } else {
                 populateFields(data.data);
+
+                // Send the same file to generate PDF
+                fetch('http://127.0.0.1:8000/generate', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(res => res.blob())
+                .then(blob => {
+                    const url = URL.createObjectURL(blob);
+                    pdfViewer.src = url;
+                })
+                .catch(error => console.error('Error generating PDF:', error));
             }
         })
         .catch(error => {
@@ -48,7 +60,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     function populateFields(data) {
-        // Populate profile information
         document.getElementById('name').value = data.profile.name || '';
         document.getElementById('email').value = data.profile.email || '';
         document.getElementById('phone').value = data.profile.phone || '';
@@ -56,23 +67,19 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('url').value = data.profile.url || '';
         document.getElementById('summary').value = data.profile.summary || '';
 
-        // Populate skills
         document.getElementById('skills').value = data.skills.join(', ') || '';
 
-        // Populate current position
         document.getElementById('current-position').value = data.current_position || '';
 
-        // Populate education entries
         const educationContainer = document.getElementById('education-container');
-        educationContainer.innerHTML = ''; // Clear existing entries
+        educationContainer.innerHTML = '';
         data.education.forEach((edu, index) => {
             const newEducationEntry = createEducationEntry(edu, index === 0); // Pass whether it's the first entry
             educationContainer.appendChild(newEducationEntry);
         });
 
-        // Populate experience entries
         const experienceContainer = document.getElementById('experience-container');
-        experienceContainer.innerHTML = ''; // Clear existing entries
+        experienceContainer.innerHTML = '';
         data.experience.forEach((exp, index) => {
             const newExperienceEntry = createExperienceEntry(exp, index === 0); // Pass whether it's the first entry
             experienceContainer.appendChild(newExperienceEntry);
@@ -80,7 +87,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Populate language entries
         const languagesContainer = document.getElementById('languages-container');
-        languagesContainer.innerHTML = ''; // Clear existing entries
+        languagesContainer.innerHTML = '';
         data.languages.forEach((lang, index) => {
             const newLanguageEntry = createLanguageEntry(lang, index === 0); // Pass whether it's the first entry
             languagesContainer.appendChild(newLanguageEntry);
@@ -111,7 +118,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <label for="education-descriptions">Descriptions:</label>
                 <textarea name="education-descriptions[]" placeholder="Your description here...">${edu.descriptions.join('\n') || ''}</textarea>
             </div>
-            ${isFirst ? '' : '<button type="button" class="remove-education">Remove</button>'} <!-- Only add for non-first entries -->
+            ${isFirst ? '' : '<button type="button" class="remove-education">Remove</button>'}
         `;
         return entry;
     }
@@ -136,7 +143,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <label for="experience-descriptions">Descriptions:</label>
                 <textarea name="experience-descriptions[]" placeholder="Your description here...">${exp.descriptions.join('\n') || ''}</textarea>
             </div>
-            ${isFirst ? '' : '<button type="button" class="remove-experience">Remove</button>'} <!-- Only add for non-first entries -->
+            ${isFirst ? '' : '<button type="button" class="remove-experience">Remove</button>'}
         `;
         return entry;
     }
@@ -153,7 +160,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <label for="proficiency">Proficiency:</label>
                 <input type="text" name="proficiency[]" value="${lang.proficiency || ''}">
             </div>
-            ${isFirst ? '' : '<button type="button" class="remove-language">Remove</button>'} <!-- Only add for non-first entries -->
+            ${isFirst ? '' : '<button type="button" class="remove-language">Remove</button>'}
         `;
         return entry;
     }
