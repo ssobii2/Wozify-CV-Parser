@@ -1,0 +1,119 @@
+@page {
+    margin: 0;
+    size: A4;
+    min-height: 371mm;
+}
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    display: flex;
+    min-height: 100vh;
+}
+.left-sidebar {
+    background-color: #002B5B;
+    color: white;
+    width: 30%;
+    padding: 15px;
+    box-sizing: border-box;
+    min-height: 371mm;
+    position: fixed;
+    top: 0;
+    bottom: 0;
+}
+.main-content {
+    width: 70%;
+    margin-left: 30%;
+    padding: 15px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    min-height: 100vh;
+}
+.logo {
+    display: block;
+    margin: 0 auto 30px;
+    max-width: 100%;
+}
+.icon {
+    width: 32px;
+    height: 32px;
+    filter: brightness(0) invert(1);
+}
+h2 {
+    color: white;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.skills-list, .languages-list {
+    list-style: none;
+    padding: 0 0 0 10px;
+    margin: 0;
+    margin-left: 30px;
+}
+.skills-list li::before, .languages-list li::before {
+    content: "•";
+    margin-right: 10px;
+}
+.section-header {
+    background-color: #1F4B70;
+    color: white;
+    padding: 12px;
+    margin: 15px 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 15px;
+    font-size: 28px;
+    width: 100%;
+    box-sizing: border-box;
+}
+.cv-id, .job-title {
+    color: #FF1F7D;
+    margin: 0 0 20px;
+    text-align: right;
+}
+.cv-id {
+    font-size: 24px;
+    font-weight: bold;
+}
+.job-title {
+    font-size: 28px;
+}
+.education-entry {
+    margin-bottom: 20px;
+}
+.education-date {
+    font-weight: bold;
+    color: white;
+}
+.education-degree {
+    font-weight: bold;
+    color: white;
+    margin-top: 5px;
+}
+.education-school {
+    color: white;
+    margin-top: 5px;
+}
+.experience-entry {
+    margin-bottom: 20px;
+}
+.experience-date {
+    font-weight: bold;
+    color: black;
+}
+.experience-job-title {
+    font-weight: bold;
+    color: black;
+    margin-top: 5px;
+}
+.experience-descriptions {
+    list-style: disc;
+    padding-left: 20px;
+    margin-top: 5px;
+}

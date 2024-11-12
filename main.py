@@ -32,6 +32,7 @@ app.mount("/static", StaticFiles(directory="frontend"), name="frontend")
 # Mount the assets directory
 app.mount("/assets", StaticFiles(directory="assets"), name="assets")
 app.mount("/outputs", StaticFiles(directory="outputs"), name="outputs")
+app.mount("/templates", StaticFiles(directory="templates"), name="templates")
 
 # Configure pdfkit
 config = pdfkit.configuration(wkhtmltopdf=r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe')
