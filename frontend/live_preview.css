@@ -3,6 +3,8 @@ body {
     font-family: Arial, sans-serif;
     display: flex;
     min-height: 100vh;
+    background-color: #ffffff;
+    color: #000000;
 }
 
 .container {
@@ -29,6 +31,8 @@ body {
     flex-direction: column;
     justify-content: flex-start;
     overflow-y: visible;
+    background-color: #ffffff;
+    color: #000000;
 }
 
 .logo {
