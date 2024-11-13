@@ -1,6 +1,5 @@
 document.addEventListener("DOMContentLoaded", function () {
   const uploadForm = document.getElementById("upload-form");
-  const saveCvButton = document.getElementById("save-cv");
   const previewIframe = document.getElementById("cv-preview");
 
   const formFields = document.querySelectorAll(
@@ -14,7 +13,7 @@ document.addEventListener("DOMContentLoaded", function () {
       .catch((error) => console.error("Error loading template:", error));
   }
 
-  window.updatePreview = function() {
+  window.updatePreview = function () {
     fetchHtmlTemplate((html) => {
       const data = {
         skills: document.getElementById("skills").value,
@@ -116,7 +115,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
       previewIframe.srcdoc = html;
     });
-  }
+  };
 
   formFields.forEach((field) => {
     field.addEventListener("input", updatePreview);
@@ -153,20 +152,30 @@ document.addEventListener("DOMContentLoaded", function () {
       });
   });
 
-  saveCvButton.addEventListener("click", function () {
-    const formData = new FormData(uploadForm);
-    fetch("http://127.0.0.1:8000/generate", {
-      method: "POST",
-      body: formData,
-    })
-      .then((res) => res.blob())
-      .then((blob) => {
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob);
-        link.download = "CV.pdf";
-        link.click();
+  document.getElementById("save-cv").addEventListener("click", function () {
+    const element = document.getElementById("cv-preview").contentDocument.body;
+
+    // Fetch the CSS file
+    fetch("/static/live_preview.css")
+      .then((response) => response.text())
+      .then((css) => {
+        // Create a style element and append the CSS
+        const styleElement = document.createElement("style");
+        styleElement.textContent = css;
+        element.prepend(styleElement);
+
+        // Use html2pdf to generate PDF
+        html2pdf()
+          .from(element)
+          .set({
+            margin: 0,
+            filename: "Generated-CV.pdf",
+            html2canvas: { scale: 2, useCORS: true, logging: true },
+            jsPDF: { unit: "in", format: [8.5, element.scrollHeight / 96], orientation: "portrait" }
+          })
+          .save();
       })
-      .catch((error) => console.error("Error generating PDF:", error));
+      .catch((error) => console.error("Error fetching CSS:", error));
   });
 
   function populateFields(data) {
