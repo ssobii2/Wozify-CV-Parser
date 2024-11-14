@@ -100,6 +100,8 @@ function addEducationEntry() {
     input.addEventListener("input", updatePreview);
   });
   educationContainer.appendChild(newEducationEntry);
+  // Update local storage after adding a new entry
+  localStorage.setItem("formData", JSON.stringify(getFormData()));
 }
 
 function addExperienceEntry() {
@@ -129,6 +131,8 @@ function addExperienceEntry() {
     input.addEventListener("input", updatePreview);
   });
   experienceContainer.appendChild(newExperienceEntry);
+  // Update local storage after adding a new entry
+  localStorage.setItem("formData", JSON.stringify(getFormData()));
 }
 
 function addLanguageEntry() {
@@ -150,6 +154,7 @@ function addLanguageEntry() {
     input.addEventListener("input", updatePreview);
   });
   languagesContainer.appendChild(newLanguageEntry);
+  localStorage.setItem("formData", JSON.stringify(formData));
 }
 
 document
@@ -168,6 +173,8 @@ document
     if (e.target.classList.contains("remove-education")) {
       e.target.closest(".education-entry").remove();
       updatePreview(); // Update preview after removal
+      // Update local storage after removing an entry
+      localStorage.setItem("formData", JSON.stringify(getFormData()));
     }
   });
 
@@ -177,6 +184,8 @@ document
     if (e.target.classList.contains("remove-experience")) {
       e.target.closest(".experience-entry").remove();
       updatePreview(); // Update preview after removal
+      // Update local storage after removing an entry
+      localStorage.setItem("formData", JSON.stringify(getFormData()));
     }
   });
 
@@ -186,5 +195,65 @@ document
     if (e.target.classList.contains("remove-language")) {
       e.target.closest(".language-entry").remove();
       updatePreview(); // Update preview after removal
+      // Update local storage after removing an entry
+      localStorage.setItem("formData", JSON.stringify(getFormData()));
     }
   });
+
+// Function to get the current form data
+function getFormData() {
+  const data = {
+    profile: {
+      name: document.getElementById("name").value,
+      email: document.getElementById("email").value,
+      phone: document.getElementById("phone").value,
+      location: document.getElementById("location").value,
+      url: document.getElementById("url").value,
+      summary: document.getElementById("summary").value,
+    },
+    skills: document
+      .getElementById("skills")
+      .value.split(",")
+      .map((skill) => skill.trim()),
+    current_position: document.getElementById("current-position").value,
+    education: Array.from(document.querySelectorAll(".education-entry")).map(
+      (entry) => ({
+        date: entry.querySelector('input[name="education-date[]"]').value || "",
+        degree: entry.querySelector('input[name="degree[]"]').value || "",
+        school: entry.querySelector('input[name="school[]"]').value || "",
+        gpa: entry.querySelector('input[name="gpa[]"]').value || "",
+        descriptions: entry
+          .querySelector('textarea[name="education-descriptions[]"]')
+          .value.split("\n")
+          .map((desc) => desc.trim()),
+      })
+    ),
+    languages: Array.from(document.querySelectorAll(".language-entry")).map(
+      (entry) => ({
+        language: entry.querySelector('input[name="language[]"]').value || "",
+        proficiency:
+          entry.querySelector('input[name="proficiency[]"]').value || "",
+      })
+    ),
+    experience: Array.from(document.querySelectorAll(".experience-entry")).map(
+      (entry) => ({
+        date:
+          entry.querySelector('input[name="experience-date[]"]').value || "",
+        job_title: entry.querySelector('input[name="job-title[]"]').value || "",
+        company: entry.querySelector('input[name="company[]"]').value || "",
+        descriptions: entry
+          .querySelector('textarea[name="experience-descriptions[]"]')
+          .value.split("\n")
+          .map((desc) => desc.trim()),
+      })
+    ),
+  };
+  return data;
+}
+
+// Update local storage whenever the form data changes
+document.querySelectorAll("input, textarea").forEach((field) => {
+  field.addEventListener("input", () => {
+    localStorage.setItem("formData", JSON.stringify(getFormData()));
+  });
+});

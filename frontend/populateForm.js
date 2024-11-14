@@ -17,7 +17,7 @@ document.addEventListener("DOMContentLoaded", function () {
     fetchHtmlTemplate((html) => {
       const data = {
         skills: document.getElementById("skills").value,
-        job_title: document.getElementById("current-position").value,
+        current_position: document.getElementById("current-position").value,
         summary: document.getElementById("summary").value,
         education: Array.from(
           document.querySelectorAll(".education-entry")
@@ -62,7 +62,7 @@ document.addEventListener("DOMContentLoaded", function () {
           .map((skill) => `<li>${skill.trim()}</li>`)
           .join("");
         iframeDocument.getElementById("job-title").textContent =
-          data.job_title || "";
+          data.current_position || "";
         iframeDocument.getElementById("personal-summary").textContent =
           data.summary || "";
 
@@ -115,6 +115,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
       previewIframe.srcdoc = html;
     });
+    localStorage.setItem("formData", JSON.stringify(getFormData()));
   };
 
   formFields.forEach((field) => {
@@ -171,7 +172,11 @@ document.addEventListener("DOMContentLoaded", function () {
             margin: 0,
             filename: "Generated-CV.pdf",
             html2canvas: { scale: 2, useCORS: true, logging: true },
-            jsPDF: { unit: "in", format: [8.5, element.scrollHeight / 96], orientation: "portrait" }
+            jsPDF: {
+              unit: "in",
+              format: [8.5, element.scrollHeight / 96],
+              orientation: "portrait",
+            },
           })
           .save();
       })
@@ -185,12 +190,10 @@ document.addEventListener("DOMContentLoaded", function () {
     document.getElementById("location").value = data.profile.location || "";
     document.getElementById("url").value = data.profile.url || "";
     document.getElementById("summary").value = data.profile.summary || "";
-
     document.getElementById("skills").value = data.skills.join(", ") || "";
+    document.getElementById("current-position").value = data.current_position || "";
 
-    document.getElementById("current-position").value =
-      data.current_position || "";
-
+    // Handle local storage data
     const educationContainer = document.getElementById("education-container");
     educationContainer.innerHTML = "";
     data.education.forEach((edu, index) => {
@@ -313,24 +316,24 @@ document.addEventListener("DOMContentLoaded", function () {
     const entry = document.createElement("div");
     entry.classList.add("language-entry");
     entry.innerHTML = `
-            <div class="form-row">
-                <label for="language">Language:</label>
-                <input type="text" name="language[]" value="${
-                  lang.language || ""
-                }">
-            </div>
-            <div class="form-row">
-                <label for="proficiency">Proficiency:</label>
-                <input type="text" name="proficiency[]" value="${
-                  lang.proficiency || ""
-                }">
-            </div>
-            ${
-              isFirst
-                ? ""
-                : '<button type="button" class="remove-language">Remove</button>'
-            }
-        `;
+              <div class="form-row">
+                  <label for="language">Language:</label>
+                  <input type="text" name="language[]" value="${
+                    lang.language || ""
+                  }">
+              </div>
+              <div class="form-row">
+                  <label for="proficiency">Proficiency:</label>
+                  <input type="text" name="proficiency[]" value="${
+                    lang.proficiency || ""
+                  }">
+              </div>
+              ${
+                isFirst
+                  ? ""
+                  : '<button type="button" class="remove-language">Remove</button>'
+              }
+          `;
     // Attach auto-updating event listeners
     entry.querySelectorAll("input, textarea").forEach((input) => {
       input.addEventListener("input", updatePreview);
@@ -338,12 +341,21 @@ document.addEventListener("DOMContentLoaded", function () {
     return entry;
   }
 
+  // Load data from local storage on page load
+  window.addEventListener("load", function () {
+    const storedData = JSON.parse(localStorage.getItem("formData")) || {};
+    populateFields(storedData);
+    updatePreview();
+  });
+
   document
     .getElementById("education-container")
     .addEventListener("click", function (e) {
       if (e.target.classList.contains("remove-education")) {
         e.target.closest(".education-entry").remove();
         updatePreview(); // Update preview after removal
+        // Update local storage after removing an entry
+        localStorage.setItem("formData", JSON.stringify(getFormData()));
       }
     });
 
@@ -353,6 +365,8 @@ document.addEventListener("DOMContentLoaded", function () {
       if (e.target.classList.contains("remove-experience")) {
         e.target.closest(".experience-entry").remove();
         updatePreview(); // Update preview after removal
+        // Update local storage after removing an entry
+        localStorage.setItem("formData", JSON.stringify(getFormData()));
       }
     });
 
@@ -362,6 +376,77 @@ document.addEventListener("DOMContentLoaded", function () {
       if (e.target.classList.contains("remove-language")) {
         e.target.closest(".language-entry").remove();
         updatePreview(); // Update preview after removal
+        // Update local storage after removing an entry
+        localStorage.setItem("formData", JSON.stringify(getFormData()));
       }
     });
+
+  // Function to get the current form data
+  function getFormData() {
+    const data = {
+      profile: {
+        name: document.getElementById("name").value,
+        email: document.getElementById("email").value,
+        phone: document.getElementById("phone").value,
+        location: document.getElementById("location").value,
+        url: document.getElementById("url").value,
+        summary: document.getElementById("summary").value,
+      },
+      skills: document
+        .getElementById("skills")
+        .value.split(",")
+        .map((skill) => skill.trim()),
+      current_position: document.getElementById("current-position").value,
+      education: Array.from(document.querySelectorAll(".education-entry")).map(
+        (entry) => ({
+          date:
+            entry.querySelector('input[name="education-date[]"]').value || "",
+          degree: entry.querySelector('input[name="degree[]"]').value || "",
+          school: entry.querySelector('input[name="school[]"]').value || "",
+          gpa: entry.querySelector('input[name="gpa[]"]').value || "",
+          descriptions: entry
+            .querySelector('textarea[name="education-descriptions[]"]')
+            .value.split("\n")
+            .map((desc) => desc.trim()),
+        })
+      ),
+      languages: Array.from(document.querySelectorAll(".language-entry")).map(
+        (entry) => ({
+          language: entry.querySelector('input[name="language[]"]').value || "",
+          proficiency:
+            entry.querySelector('input[name="proficiency[]"]').value || "",
+        })
+      ),
+      experience: Array.from(
+        document.querySelectorAll(".experience-entry")
+      ).map((entry) => ({
+        date:
+          entry.querySelector('input[name="experience-date[]"]').value || "",
+        job_title: entry.querySelector('input[name="job-title[]"]').value || "",
+        company: entry.querySelector('input[name="company[]"]').value || "",
+        descriptions: entry
+          .querySelector('textarea[name="experience-descriptions[]"]')
+          .value.split("\n")
+          .map((desc) => desc.trim()),
+      })),
+    };
+    return data;
+  }
+
+  // Update local storage whenever the form data changes
+  formFields.forEach((field) => {
+    field.addEventListener("input", () => {
+      localStorage.setItem("formData", JSON.stringify(getFormData()));
+    });
+  });
+  
+  function clearLocalStorage() {
+    localStorage.removeItem("formData");
+    populateFields({});
+    updatePreview();
+  }
+
+  document
+    .getElementById("clear-button")
+    .addEventListener("click", clearLocalStorage);
 });
