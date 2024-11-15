@@ -1,3 +1,5 @@
+let currentCVId = null;
+
 document.addEventListener("DOMContentLoaded", function () {
   const uploadForm = document.getElementById("upload-form");
   const previewIframe = document.getElementById("cv-preview");
@@ -70,7 +72,7 @@ document.addEventListener("DOMContentLoaded", function () {
         iframeDocument.getElementById("personal-summary").textContent =
           data.summary || "";
 
-        iframeDocument.querySelector(".cv-id").textContent = generateCvId();
+        iframeDocument.querySelector(".cv-id").textContent = currentCVId;
 
         // Education
         const educationEntries =
@@ -123,6 +125,8 @@ document.addEventListener("DOMContentLoaded", function () {
     });
     localStorage.setItem("formData", JSON.stringify(getFormData()));
   };
+
+  currentCVId = generateCvId();
 
   formFields.forEach((field) => {
     field.addEventListener("input", updatePreview);
@@ -177,10 +181,11 @@ document.addEventListener("DOMContentLoaded", function () {
           .set({
             margin: 0,
             filename: "Generated-CV.pdf",
-            html2canvas: { useCORS: true },
+            html2canvas: { scale: 2, useCORS: true },
             jsPDF: {
               unit: "in",
               format: [8.5, element.scrollHeight / 105],
+              // format: "a4",
               orientation: "portrait"
             },
           })

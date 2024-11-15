@@ -2,7 +2,6 @@ body {
     margin: 0;
     font-family: Arial, sans-serif;
     display: flex;
-    min-height: 100vh;
     background-color: #ffffff;
     color: #000000;
 }
@@ -11,7 +10,6 @@ body {
     display: flex;
     width: 100%;
     overflow-y: auto;
-    height: 100vh;
 }
 
 .left-sidebar {
@@ -22,12 +20,10 @@ body {
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
-    min-height: 100vh;
 }
 
 .main-content {
     width: 70%;
-    height: 100vh;
     padding: 15px;
     box-sizing: border-box;
     display: flex;
