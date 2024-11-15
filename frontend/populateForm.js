@@ -183,7 +183,13 @@ document.addEventListener("DOMContentLoaded", function () {
       .catch((error) => console.error("Error fetching CSS:", error));
   });
 
-  function populateFields(data) {
+  function populateFields(storedData) {
+    const data = storedData || {};
+    data.profile = data.profile || {};
+    data.skills = data.skills || [];
+    data.education = data.education || [];
+    data.experience = data.experience || [];
+    data.languages = data.languages || [];
     document.getElementById("name").value = data.profile.name || "";
     document.getElementById("email").value = data.profile.email || "";
     document.getElementById("phone").value = data.profile.phone || "";
@@ -442,7 +448,34 @@ document.addEventListener("DOMContentLoaded", function () {
   
   function clearLocalStorage() {
     localStorage.removeItem("formData");
-    populateFields({});
+    // Reset form fields
+    document.getElementById("name").value = "";
+    document.getElementById("email").value = "";
+    document.getElementById("phone").value = "";
+    document.getElementById("location").value = "";
+    document.getElementById("url").value = "";
+    document.getElementById("summary").value = "";
+    document.getElementById("skills").value = "";
+    document.getElementById("current-position").value = "";
+  
+    // Reset education entries
+    const educationContainer = document.getElementById("education-container");
+    educationContainer.innerHTML = "";
+    addEducationEntry();
+  
+    // Reset experience entries
+    const experienceContainer = document.getElementById("experience-container");
+    experienceContainer.innerHTML = "";
+    addExperienceEntry();
+  
+    // Reset language entries
+    const languagesContainer = document.getElementById("languages-container");
+    languagesContainer.innerHTML = "";
+    addLanguageEntry();
+    
+    // Clear file input
+    document.getElementById("file-input").value = "";
+  
     updatePreview();
   }
 

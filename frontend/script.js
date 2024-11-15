@@ -1,3 +1,5 @@
+let formData = new FormData();
+
 document.getElementById("upload-form").addEventListener("submit", function (e) {
   e.preventDefault();
   const fileInput = document.getElementById("file-input");
@@ -7,7 +9,6 @@ document.getElementById("upload-form").addEventListener("submit", function (e) {
     return;
   }
 
-  const formData = new FormData();
   formData.append("file", file);
 
   // Process education entries
