@@ -13,6 +13,10 @@ document.addEventListener("DOMContentLoaded", function () {
       .catch((error) => console.error("Error loading template:", error));
   }
 
+  function generateCvId() {
+    return `#${Math.floor(1000 + Math.random() * 9000)}`;
+  }
+
   window.updatePreview = function () {
     fetchHtmlTemplate((html) => {
       const data = {
@@ -65,6 +69,8 @@ document.addEventListener("DOMContentLoaded", function () {
           data.current_position || "";
         iframeDocument.getElementById("personal-summary").textContent =
           data.summary || "";
+
+        iframeDocument.querySelector(".cv-id").textContent = generateCvId();
 
         // Education
         const educationEntries =
@@ -171,11 +177,11 @@ document.addEventListener("DOMContentLoaded", function () {
           .set({
             margin: 0,
             filename: "Generated-CV.pdf",
-            html2canvas: { scale: 2, useCORS: true, logging: true },
+            html2canvas: { useCORS: true },
             jsPDF: {
               unit: "in",
-              format: [8.5, element.scrollHeight / 96],
-              orientation: "portrait",
+              format: [8.5, element.scrollHeight / 105],
+              orientation: "portrait"
             },
           })
           .save();
