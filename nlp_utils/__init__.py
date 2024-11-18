@@ -1,25 +1,40 @@
 from .profile_extractor import ProfileExtractor
 from .education_extractor import EducationExtractor
 from .experience_extractor import ExperienceExtractor
+from .experience_extractor_hu import ExperienceExtractorHu
 from .skills_extractor import SkillsExtractor
 from .language_extractor import LanguageExtractor
 from .current_position_extractor import CurrentPositionExtractor
 
 import re
 import spacy
+import huspacy
 from langdetect import detect
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
 # Load English and Hungarian models
-nlp_en = spacy.load('en_core_web_sm')
-nlp_hu = spacy.load('hu_core_news_md')
+try:
+    nlp_en = spacy.load('en_core_web_sm')
+    nlp_hu = huspacy.load('hu_core_news_md')
+    
+    # Add special case patterns for Hungarian characters and common abbreviations
+    special_cases = [{
+        'ORTH': word
+    } for word in ['Kft.', 'Zrt.', 'Bt.', 'Nyrt.', 'dr.', 'Dr.', 'id.', 'ifj.']]
+    
+    for case in special_cases:
+        nlp_hu.tokenizer.add_special_case(case['ORTH'], [case])
+except Exception as e:
+    print(f"Error loading NLP models: {str(e)}")
+    raise
 
 class CVExtractor:
     def __init__(self):
         self.profile_extractor = ProfileExtractor(nlp_en, nlp_hu)
         self.education_extractor = EducationExtractor(nlp_en, nlp_hu)
         self.experience_extractor = ExperienceExtractor(nlp_en, nlp_hu)
+        self.experience_extractor_hu = ExperienceExtractorHu(nlp_hu)
         self.skills_extractor = SkillsExtractor(nlp_en, nlp_hu)
         self.language_extractor = LanguageExtractor(nlp_en, nlp_hu)
         self.current_position_extractor = CurrentPositionExtractor(nlp_en, nlp_hu)
@@ -46,10 +61,50 @@ class CVExtractor:
         """Determine the language of the text and return the appropriate spaCy NLP model."""
         try:
             language = detect(text)
-            return nlp_hu if language == 'hu' else nlp_en
-        except:
-            # Default to English if detection fails
+            if language == 'hu':
+                # For Hungarian text, first try to clean it
+                cleaned_text = text.encode('utf-8', errors='ignore').decode('utf-8')
+                # If the text contains many Hungarian-specific characters, use Hungarian model
+                hungarian_chars = set('áéíóöőúüűÁÉÍÓÖŐÚÜŰ')
+                if any(c in hungarian_chars for c in cleaned_text):
+                    try:
+                        # Try processing a small sample first
+                        sample = cleaned_text[:100]
+                        _ = nlp_hu(sample)
+                        return nlp_hu
+                    except Exception as e:
+                        print(f"Warning: Hungarian model failed, falling back to English: {str(e)}")
+                        return nlp_en
             return nlp_en
+        except Exception as e:
+            print(f"Warning: Language detection failed, using English model: {str(e)}")
+            return nlp_en
+
+    def safe_nlp_process(self, text: str, nlp_model):
+        """Safely process text with NLP model, handling potential vocabulary issues."""
+        try:
+            # First try processing the whole text
+            return nlp_model(text)
+        except Exception as e:
+            if "Can't retrieve string for hash" in str(e):
+                # If vocabulary error occurs, try processing sentence by sentence
+                sentences = text.split('.')
+                processed_docs = []
+                for sentence in sentences:
+                    try:
+                        if sentence.strip():
+                            doc = nlp_model(sentence.strip())
+                            processed_docs.append(doc)
+                    except Exception as sent_error:
+                        print(f"Warning: Skipping sentence due to error: {str(sent_error)}")
+                        continue
+
+                # Combine the successfully processed sentences
+                if processed_docs:
+                    return processed_docs[0].doc.from_docs(processed_docs)
+
+            # If all else fails, return a basic processed version
+            return nlp_en(text)
 
     def extract_dates(self, text: str) -> List[str]:
         """Extract dates from text using various patterns."""
@@ -112,55 +167,94 @@ class CVExtractor:
                 'url': '',
                 'summary': ''
             },
-            'education': [],
             'experience': [],
+            'education': [],
             'skills': [],
-            'current_position': '',
-            'languages': [{
-                'language': '',
-                'proficiency': ''
-            }]
+            'languages': [],
+            'current_position': ''
         }
         
-        # Extract each section with language-specific processing
-        profile_data = self.profile_extractor.extract_profile(text)
-        if profile_data:
-            extracted_data['profile'].update(profile_data)
+        try:
+            # Pre-process text
+            text = text.encode('utf-8', errors='ignore').decode('utf-8')
+            
+            # Get appropriate model and process text
+            nlp = self.get_nlp_model_for_text(text)
+            doc = self.safe_nlp_process(text, nlp)
+            
+            # Extract profile information
+            try:
+                profile_data = self.profile_extractor.extract_profile(text)
+                if profile_data:
+                    extracted_data['profile'] = profile_data
+            except Exception as e:
+                print(f"Warning: Error extracting profile: {str(e)}")
+            
+            # Extract work experience
+            try:
+                work_experience = self.extract_work_experience(text)
+                if work_experience:
+                    extracted_data['experience'] = work_experience
+            except Exception as e:
+                print(f"Warning: Error extracting work experience: {str(e)}")
+            
+            # Extract education
+            try:
+                education = self.education_extractor.extract_education(text)
+                if education:
+                    extracted_data['education'] = education
+            except Exception as e:
+                print(f"Warning: Error extracting education: {str(e)}")
+            
+            # Extract skills
+            try:
+                skills = self.skills_extractor.extract_skills(text)
+                if skills:
+                    extracted_data['skills'] = skills
+            except Exception as e:
+                print(f"Warning: Error extracting skills: {str(e)}")
+            
+            # Extract languages
+            try:
+                languages = self.language_extractor.extract_languages(text)
+                if languages:
+                    extracted_data['languages'] = languages
+            except Exception as e:
+                print(f"Warning: Error extracting languages: {str(e)}")
+            
+            # Extract current position
+            try:
+                current_position = self.current_position_extractor.extract_current_position(text, extracted_data.get('experience', []))
+                if current_position:
+                    extracted_data['current_position'] = current_position
+            except Exception as e:
+                print(f"Warning: Error extracting current position: {str(e)}")
+            
+            return extracted_data
+            
+        except Exception as e:
+            print(f"Error in extract_entities: {str(e)}")
+            return extracted_data
 
-        education_data = self.education_extractor.extract_education(text)
-        if education_data:
-            extracted_data['education'] = education_data
-
-        experience_data = self.experience_extractor.extract_work_experience(text)
-        if experience_data:
-            extracted_data['experience'] = experience_data
-
-        skills = self.extract_skills(text)
-        if skills:
-            extracted_data['skills'] = skills
-
-        current_position = self.extract_current_position(text)
-        if current_position:
-            extracted_data['current_position'] = current_position
-
-        languages = self.extract_languages(text)
-        if languages:
-            extracted_data['languages'] = languages
-
-        return extracted_data
+    def extract_work_experience(self, text: str) -> List[Dict]:
+        """Extract detailed work experience information using ExperienceExtractor."""
+        try:
+            language = detect(text)
+            if language == 'hu':
+                return self.experience_extractor_hu.extract_work_experience(text)
+            return self.experience_extractor.extract_work_experience(text)
+        except Exception as e:
+            print(f"Error extracting work experience: {str(e)}")
+            return []
 
     def extract_current_position(self, text: str) -> Optional[str]:
         """Extract the most recent job title using CurrentPositionExtractor."""
-        work_experience = self.experience_extractor.extract_work_experience(text)
+        work_experience = self.extract_work_experience(text)
         return self.current_position_extractor.extract_current_position(text, work_experience)
 
     def extract_education(self, text: str) -> List[Dict]:
         """Extract detailed education information using EducationExtractor."""
         return self.education_extractor.extract_education(text)
-
-    def extract_work_experience(self, text: str) -> List[Dict]:
-        """Extract detailed work experience information using ExperienceExtractor."""
-        return self.experience_extractor.extract_work_experience(text)
 
     def extract_skills(self, text: str) -> List[str]:
         """Extract skills from text using SkillsExtractor."""
@@ -171,6 +265,6 @@ class CVExtractor:
         return self.language_extractor.extract_languages(text)
 
 __all__ = [
-    'ProfileExtractor', 'EducationExtractor', 'ExperienceExtractor', 
+    'ProfileExtractor', 'EducationExtractor', 'ExperienceExtractor', 'ExperienceExtractorHu',
     'SkillsExtractor', 'LanguageExtractor', 'CurrentPositionExtractor', 'CVExtractor'
 ]

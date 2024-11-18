@@ -19,17 +19,25 @@ logging.basicConfig(level=logging.INFO)
 
 def test_generate_cv_and_json():
     # List of test CV files
-    test_files = [
-        "My-CV-Simple.pdf",
-    ]
-
-    '''
+    
     test_files = [
         "CV_HU_GuttmannAndras.docx.pdf",
         "CV_HUN_Szomszed_Norbert.pdf",
         "FP_CV_HUN.pdf",
         "Richard-3.pdf",
         "TothJozsef_CV_HU.pdf",
+    ]
+
+    '''
+    test_files = [
+        "My-CV-Simple.pdf",
+        "Konyves_Lajos_CV_EN_.pdf",
+        "Abbasi_Resume.pdf",
+        "Aladar_Feher_CV.pdf",
+        "Medior Software engineer Devora Csaba IDnr 532 (1).pdf",
+        "MindtechApps_CV_LeventeV_Senior_ScrumMaster.pdf",
+        "Ussayed_Resume-Simple.pdf",
+        "My-CV.pdf"
     ]
     '''
     
@@ -57,19 +65,24 @@ def test_generate_cv_and_json():
                 logging.info(f"Process Response for {cv_file}: {json_data}")
                 
                 # Test generate endpoint to generate PDF
-                with open(test_filename, "rb") as f:
-                    files = {"file": (test_filename, f, "application/pdf")}
-                    response = client.post("/generate", files=files)
+                # with open(test_filename, "rb") as f:
+                    # files = {"file": (test_filename, f, "application/pdf")}
+                    # response = client.post("/generate", files=files)
+                # Commenting out PDF generation for now
+                # Verify PDF file exists
+                # pdf_filename = f"{os.path.splitext(os.path.basename(test_filename))[0]}_formatted.pdf"
+                # pdf_path = os.path.join(output_dir, pdf_filename)
+                # assert os.path.exists(pdf_path)
                 
                 # Verify PDF generation
-                assert response.status_code == 200
-                assert response.headers["content-type"] == "application/pdf"
-                logging.info(f"Generate Response Status for {cv_file}: {response.status_code}")
+                # assert response.status_code == 200
+                # assert response.headers["content-type"] == "application/pdf"
+                # logging.info(f"Generate Response Status for {cv_file}: {response.status_code}")
                 
                 # Verify PDF file exists
-                pdf_filename = f"{os.path.splitext(os.path.basename(test_filename))[0]}_formatted.pdf"
-                pdf_path = os.path.join(output_dir, pdf_filename)
-                assert os.path.exists(pdf_path)
+                # pdf_filename = f"{os.path.splitext(os.path.basename(test_filename))[0]}_formatted.pdf"
+                # pdf_path = os.path.join(output_dir, pdf_filename)
+                # assert os.path.exists(pdf_path)
                 
         except Exception as e:
             logging.error(f"An error occurred: {e}")

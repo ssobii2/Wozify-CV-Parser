@@ -2,6 +2,7 @@ import re
 from typing import Dict, List, Optional
 import spacy
 from langdetect import detect, LangDetectException
+import logging
 
 class CurrentPositionExtractor:
     def __init__(self, nlp_en, nlp_hu):
@@ -25,37 +26,61 @@ class CurrentPositionExtractor:
         except LangDetectException:
             return self.nlp_en
 
+    def _parse_date(self, date_str: str) -> tuple:
+        """Parse date string into a comparable tuple of (year, month)."""
+        try:
+            # Handle current position indicators
+            current_indicators = ['Present', 'Current', 'Now', 'Jelenleg', 'Jelenlegi']
+            if any(indicator in date_str for indicator in current_indicators):
+                return (float('inf'), float('inf'))  # Will always be latest
+            
+            # Extract year
+            year_match = re.search(r'\b(19|20)\d{2}\b', date_str)
+            year = int(year_match.group(0)) if year_match else 0
+            
+            # Extract month
+            month_map = {
+                'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
+                'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12,
+                # Hungarian months
+                'jan': 1, 'feb': 2, 'már': 3, 'ápr': 4, 'máj': 5, 'jún': 6,
+                'júl': 7, 'aug': 8, 'szep': 9, 'okt': 10, 'nov': 11, 'dec': 12
+            }
+            
+            month = 0
+            for month_str, month_num in month_map.items():
+                if month_str in date_str.lower():
+                    month = month_num
+                    break
+            
+            return (year, month)
+        except Exception:
+            return (0, 0)  # Return lowest priority for unparseable dates
+
     def extract_current_position(self, text: str, work_experience: List[Dict]) -> Optional[str]:
-        """Extract the most recent job title from experience section using NLP and fallback logic."""
-        # Use NLP to extract job titles
-        nlp = self.get_nlp_model_for_text(text)
-        most_recent_job = None
-        most_recent_date = None
-        
-        for job in work_experience:
-            date = job.get('date')
-            job_title = job.get('job_title')
+        """Extract the most recent job title from experience section using pattern matching and fallback logic."""
+        if not text or not work_experience:
+            return None
+
+        try:
+            # Sort experiences by date, with current positions first
+            def get_date_score(job):
+                date = job.get('date', '')
+                year, month = self._parse_date(date)
+                # Return tuple for sorting: (year, month, original_date)
+                # original_date is included to maintain stable sorting for same dates
+                return (year, month, date)
             
-            # Use NLP to verify job title
-            if job_title:
-                doc = nlp(job_title)
-                for ent in doc.ents:
-                    if ent.label_ == 'JOB_TITLE':
-                        job_title = ent.text
-                        break
+            # Sort work experiences by date, most recent first
+            sorted_experiences = sorted(work_experience, key=get_date_score, reverse=True)
             
-            # Check if the job is current
-            if date and ('Present' in date or 'Current' in date or 'Now' in date or 'Jelenleg' in date):
-                return job_title
+            # Take the most recent position (should be first after sorting)
+            if sorted_experiences:
+                return sorted_experiences[0].get('job_title')
             
-            # Parse the date to find the most recent one
-            if date:
-                # Extract the end year from the date range
-                end_year_match = re.search(r'\b\d{4}\b', date.split('-')[-1])
-                if end_year_match:
-                    end_year = int(end_year_match.group(0))
-                    if most_recent_date is None or end_year > most_recent_date:
-                        most_recent_date = end_year
-                        most_recent_job = job_title
-        
-        return most_recent_job
+            return None
+
+        except Exception as e:
+            logging.warning(f"Warning: Current position extraction failed: {str(e)}")
+            # Emergency fallback: Return the first job title from original list
+            return work_experience[0].get('job_title') if work_experience else None
