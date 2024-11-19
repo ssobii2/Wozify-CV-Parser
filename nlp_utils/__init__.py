@@ -1,5 +1,6 @@
 from .profile_extractor import ProfileExtractor
 from .education_extractor import EducationExtractor
+from .education_extractor_hu import EducationExtractorHu
 from .experience_extractor import ExperienceExtractor
 from .experience_extractor_hu import ExperienceExtractorHu
 from .skills_extractor import SkillsExtractor
@@ -33,6 +34,7 @@ class CVExtractor:
     def __init__(self):
         self.profile_extractor = ProfileExtractor(nlp_en, nlp_hu)
         self.education_extractor = EducationExtractor(nlp_en, nlp_hu)
+        self.education_extractor_hu = EducationExtractorHu(nlp_hu)
         self.experience_extractor = ExperienceExtractor(nlp_en)
         self.experience_extractor_hu = ExperienceExtractorHu(nlp_hu)
         self.skills_extractor = SkillsExtractor(nlp_en, nlp_hu)
@@ -200,7 +202,7 @@ class CVExtractor:
             
             # Extract education
             try:
-                education = self.education_extractor.extract_education(text)
+                education = self.extract_education(text)
                 if education:
                     extracted_data['education'] = education
             except Exception as e:
@@ -254,7 +256,20 @@ class CVExtractor:
 
     def extract_education(self, text: str) -> List[Dict]:
         """Extract detailed education information using EducationExtractor."""
-        return self.education_extractor.extract_education(text)
+        try:
+            language = detect(text)
+            if language == 'hu':
+                return self.education_extractor_hu.extract_education(text)
+            return self.education_extractor.extract_education(text)
+        except Exception as e:
+            print(f"Error extracting education: {str(e)}")
+            return [{
+                'school': '',
+                'degree': '',
+                'gpa': '',
+                'date': '',
+                'descriptions': []
+            }]
 
     def extract_skills(self, text: str) -> List[str]:
         """Extract skills from text using SkillsExtractor."""
@@ -265,6 +280,6 @@ class CVExtractor:
         return self.language_extractor.extract_languages(text)
 
 __all__ = [
-    'ProfileExtractor', 'EducationExtractor', 'ExperienceExtractor', 'ExperienceExtractorHu',
+    'ProfileExtractor', 'EducationExtractor', 'EducationExtractorHu', 'ExperienceExtractor', 'ExperienceExtractorHu',
     'SkillsExtractor', 'LanguageExtractor', 'CurrentPositionExtractor', 'CVExtractor'
 ]
