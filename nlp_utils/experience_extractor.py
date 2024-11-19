@@ -1,35 +1,25 @@
 import re
 from typing import Dict, List, Optional
 import spacy
-from langdetect import detect, LangDetectException
 
 class ExperienceExtractor:
-    def __init__(self, nlp_en, nlp_hu):
-        self.nlp_en = nlp_en
-        self.nlp_hu = nlp_hu
+    def __init__(self, nlp_en):
+        self.nlp = nlp_en
         self.section_headers = {
             'experience': [
                 'experience', 'work experience', 'employment history', 'work history', 
                 'professional experience', 'job experience', 'career history', 
-                'previous employment', 'past roles', 'work background', 'employment record',
-                'munkatapasztalat', 'szakmai tapasztalat', 'munkatörténet', 'korábbi munkák'
+                'previous employment', 'past roles', 'work background', 'employment record'
             ]
         }
         
-        self.job_indicators = {
-            'en': [
-                'developer', 'engineer', 'manager', 'consultant', 'analyst', 
-                'specialist', 'coordinator', 'assistant', 'director', 'lead',
-                'intern', 'trainee', 'administrator', 'supervisor'
-            ],
-            'hu': [
-                'fejlesztő', 'mérnök', 'menedzser', 'tanácsadó', 'elemző', 
-                'szakértő', 'koordinátor', 'asszisztens', 'igazgató', 'vezető',
-                'gyakornok', 'képzés alatt álló', 'adminisztrátor', 'felügyelő'
-            ]
-        }
+        self.job_indicators = [
+            'developer', 'engineer', 'manager', 'consultant', 'analyst', 
+            'specialist', 'coordinator', 'assistant', 'director', 'lead',
+            'intern', 'trainee', 'administrator', 'supervisor'
+        ]
         
-        self.company_indicators = ['inc', 'ltd', 'llc', 'corp', 'gmbh', 'kft', 'zrt', 'bt', 'nyrt']
+        self.company_indicators = ['inc', 'ltd', 'llc', 'corp', 'gmbh']
 
         # Define date patterns for date extraction
         self.date_patterns = [
@@ -39,18 +29,9 @@ class ExperienceExtractor:
             r'\d{1,2}/\d{1,2}/\d{2,4}',  # MM/DD/YYYY or DD/MM/YYYY
             r'\d{4}-\d{2}-\d{2}',  # YYYY-MM-DD
             r'\d{4}',  # Year only
-            r'\d{2}\.\d{2}\.\d{4}',  # Hungarian format
             r'\d{4}/\d{2}/\d{2}',  # Alternative format
             r'\d{2}/\d{2}/\d{4}'   # Alternative format
         ]
-
-    def get_nlp_model_for_text(self, text: str):
-        """Determine the language of the text and return the appropriate spaCy NLP model."""
-        try:
-            language = detect(text)
-            return self.nlp_hu if language == 'hu' else self.nlp_en
-        except LangDetectException:
-            return self.nlp_en
 
     def extract_section(self, text: str, section_keywords: List[str]) -> List[str]:
         """Extract a section from text based on keywords and NLP context."""
@@ -59,8 +40,7 @@ class ExperienceExtractor:
         in_section = False
         
         # Use NLP model to process the text
-        nlp = self.get_nlp_model_for_text(text)
-        doc = nlp(text)
+        doc = self.nlp(text)
 
         for sent in doc.sents:
             line = sent.text.strip()
@@ -78,7 +58,7 @@ class ExperienceExtractor:
                 next_line = sent.nbor(1).text.strip()
                 is_next_different_section = any(
                     keyword in next_line.lower() 
-                    for keyword in ['education', 'skills', 'projects', 'languages', 'oktatás', 'készségek', 'projektek', 'nyelvek']
+                    for keyword in ['education', 'skills', 'projects', 'languages']
                 )
             
             if is_section_header:
@@ -95,8 +75,7 @@ class ExperienceExtractor:
 
     def extract_date_range(self, text: str) -> Optional[str]:
         """Extract date range from text using NLP for language support."""
-        nlp = self.get_nlp_model_for_text(text)
-        doc = nlp(text)
+        doc = self.nlp(text)
 
         # Use spaCy's NER to find date entities
         date_entities = [ent.text for ent in doc.ents if ent.label_ == 'DATE']
@@ -115,8 +94,7 @@ class ExperienceExtractor:
 
     def is_likely_company(self, text: str) -> bool:
         """Check if text is likely a company name using NLP and additional heuristics."""
-        nlp = self.get_nlp_model_for_text(text)
-        doc = nlp(text)
+        doc = self.nlp(text)
 
         # Use spaCy's NER to find organization entities
         for ent in doc.ents:
@@ -133,15 +111,14 @@ class ExperienceExtractor:
                 return True
 
         # Additional pattern matching for common company structures
-        if re.search(r'\b(?:Inc|Ltd|LLC|Corp|GmbH|Kft|Zrt|Bt|Nyrt)\b', text, re.IGNORECASE):
+        if re.search(r'\b(?:Inc|Ltd|LLC|Corp|GmbH)\b', text, re.IGNORECASE):
             return True
 
         return False
 
     def is_valid_company_structure(self, text: str) -> bool:
         """Check if the text has a valid company name structure."""
-        nlp = self.get_nlp_model_for_text(text)
-        doc = nlp(text)
+        doc = self.nlp(text)
 
         if text[0].isupper():
             # Check for the presence of verbs or prepositions which are unlikely in company names
@@ -158,8 +135,7 @@ class ExperienceExtractor:
 
     def is_likely_job_title(self, text: str) -> bool:
         """Check if text is likely a job title."""
-        return any(indicator in text.lower() for indicator in self.job_indicators['en']) or \
-               any(indicator in text.lower() for indicator in self.job_indicators['hu'])
+        return any(indicator in text.lower() for indicator in self.job_indicators)
 
     def extract_work_experience(self, text: str) -> List[Dict]:
         """Extract detailed work experience information."""
@@ -167,7 +143,7 @@ class ExperienceExtractor:
         current_entry = None
         
         # Updated regex pattern to capture the new format
-        work_pattern = r'(?:WORK\s*EXPERIENCE|EXPERIENCE|EMPLOYMENT|PROFESSIONAL\s*BACKGROUND|WORK\s*HISTORY|MUNKATAPASZTALAT|SZAKMAI\s*TAPASZTALAT).*?(?=\n\s*(?:EDUCATION|SKILLS|PROJECTS|LANGUAGES|CERTIFICATIONS|INTERESTS|TANULMÁNYOK|KÉSZSÉGEK|PROJEKTEK|NYELVEK|$))'
+        work_pattern = r'(?:WORK\s*EXPERIENCE|EXPERIENCE|EMPLOYMENT|PROFESSIONAL\s*BACKGROUND|WORK\s*HISTORY).*?(?=\n\s*(?:EDUCATION|SKILLS|PROJECTS|LANGUAGES|CERTIFICATIONS|INTERESTS|$))'
         work_match = re.search(work_pattern, text, re.DOTALL | re.IGNORECASE)
         
         if work_match:
@@ -176,7 +152,7 @@ class ExperienceExtractor:
             
             for i, line in enumerate(lines):
                 # Skip section headers
-                if re.match(r'(?:WORK\s*EXPERIENCE|EXPERIENCE|EMPLOYMENT|PROFESSIONAL\s*BACKGROUND|WORK\s*HISTORY|MUNKATAPASZTALAT|SZAKMAI\s*TAPASZTALAT)', line, re.IGNORECASE):
+                if re.match(r'(?:WORK\s*EXPERIENCE|EXPERIENCE|EMPLOYMENT|PROFESSIONAL\s*BACKGROUND|WORK\s*HISTORY)', line, re.IGNORECASE):
                     continue
                 
                 # Look for date ranges
@@ -211,8 +187,7 @@ class ExperienceExtractor:
                 
                 if current_entry:
                     # New approach: Use NLP and context to extract descriptions
-                    nlp = self.get_nlp_model_for_text(line)
-                    doc = nlp(line)
+                    doc = self.nlp(line)
                     
                     # Use sentence boundaries to extract individual sentences
                     for sent in doc.sents:
@@ -262,7 +237,7 @@ class ExperienceExtractor:
         current_entry = None
         
         # Extract work experience section
-        work_pattern = r'(?:WORK\s*EXPERIENCE|EXPERIENCE|EMPLOYMENT|PROFESSIONAL\s*BACKGROUND|WORK\s*HISTORY|MUNKATAPASZTALAT|SZAKMAI\s*TAPASZTALAT).*?(?=\n\s*(?:EDUCATION|SKILLS|PROJECTS|LANGUAGES|CERTIFICATIONS|INTERESTS|TANULMÁNYOK|KÉSZSÉGEK|PROJEKTEK|NYELVEK|$))'
+        work_pattern = r'(?:WORK\s*EXPERIENCE|EXPERIENCE|EMPLOYMENT|PROFESSIONAL\s*BACKGROUND|WORK\s*HISTORY).*?(?=\n\s*(?:EDUCATION|SKILLS|PROJECTS|LANGUAGES|CERTIFICATIONS|INTERESTS|$))'
         work_match = re.search(work_pattern, text, re.DOTALL | re.IGNORECASE)
         
         if work_match:
@@ -271,7 +246,7 @@ class ExperienceExtractor:
             
             for i, line in enumerate(lines):
                 # Skip section headers
-                if re.match(r'(?:WORK\s*EXPERIENCE|EXPERIENCE|EMPLOYMENT|PROFESSIONAL\s*BACKGROUND|WORK\s*HISTORY|MUNKATAPASZTALAT|SZAKMAI\s*TAPASZTALAT)', line, re.IGNORECASE):
+                if re.match(r'(?:WORK\s*EXPERIENCE|EXPERIENCE|EMPLOYMENT|PROFESSIONAL\s*BACKGROUND|WORK\s*HISTORY)', line, re.IGNORECASE):
                     continue
                 
                 # Look for date ranges

@@ -33,7 +33,7 @@ class CVExtractor:
     def __init__(self):
         self.profile_extractor = ProfileExtractor(nlp_en, nlp_hu)
         self.education_extractor = EducationExtractor(nlp_en, nlp_hu)
-        self.experience_extractor = ExperienceExtractor(nlp_en, nlp_hu)
+        self.experience_extractor = ExperienceExtractor(nlp_en)
         self.experience_extractor_hu = ExperienceExtractorHu(nlp_hu)
         self.skills_extractor = SkillsExtractor(nlp_en, nlp_hu)
         self.language_extractor = LanguageExtractor(nlp_en, nlp_hu)
