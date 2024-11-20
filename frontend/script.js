@@ -205,30 +205,45 @@ document
 function getFormData() {
   const data = {
     profile: {
-      name: document.getElementById("name").value,
-      email: document.getElementById("email").value,
-      phone: document.getElementById("phone").value,
-      location: document.getElementById("location").value,
-      url: document.getElementById("url").value,
-      summary: document.getElementById("summary").value,
+      name: document.getElementById("name").value || "",
+      email: document.getElementById("email").value || "",
+      phone: document.getElementById("phone").value || "",
+      location: document.getElementById("location").value || "",
+      url: document.getElementById("url").value || "",
+      summary: document.getElementById("summary").value || "",
     },
-    skills: document
-      .getElementById("skills")
-      .value.split(",")
-      .map((skill) => skill.trim()),
-    current_position: document.getElementById("current-position").value,
-    education: Array.from(document.querySelectorAll(".education-entry")).map(
+    experience: Array.from(document.querySelectorAll(".experience-entry")).map(
       (entry) => ({
-        date: entry.querySelector('input[name="education-date[]"]').value || "",
-        degree: entry.querySelector('input[name="degree[]"]').value || "",
-        school: entry.querySelector('input[name="school[]"]').value || "",
-        gpa: entry.querySelector('input[name="gpa[]"]').value || "",
+        company: entry.querySelector('input[name="company[]"]').value || "",
+        job_title: entry.querySelector('input[name="job-title[]"]').value || "",
+        date: entry.querySelector('input[name="experience-date[]"]').value ||
+          "",
         descriptions: entry
-          .querySelector('textarea[name="education-descriptions[]"]')
+          .querySelector('textarea[name="experience-descriptions[]"]')
           .value.split("\n")
+          .filter((desc) => desc.trim() !== "")
           .map((desc) => desc.trim()),
       })
     ),
+    education: Array.from(document.querySelectorAll(".education-entry")).map(
+      (entry) => ({
+        school: entry.querySelector('input[name="school[]"]').value || "",
+        degree: entry.querySelector('input[name="degree[]"]').value || "",
+        gpa: entry.querySelector('input[name="gpa[]"]').value || "",
+        date: entry.querySelector('input[name="education-date[]"]').value ||
+          "",
+        descriptions: entry
+          .querySelector('textarea[name="education-descriptions[]"]')
+          .value.split("\n")
+          .filter((desc) => desc.trim() !== "")
+          .map((desc) => desc.trim()),
+      })
+    ),
+    skills: document
+      .getElementById("skills")
+      .value.split(",")
+      .map((skill) => skill.trim())
+      .filter((skill) => skill !== ""),
     languages: Array.from(document.querySelectorAll(".language-entry")).map(
       (entry) => ({
         language: entry.querySelector('input[name="language[]"]').value || "",
@@ -236,18 +251,7 @@ function getFormData() {
           entry.querySelector('input[name="proficiency[]"]').value || "",
       })
     ),
-    experience: Array.from(document.querySelectorAll(".experience-entry")).map(
-      (entry) => ({
-        date:
-          entry.querySelector('input[name="experience-date[]"]').value || "",
-        job_title: entry.querySelector('input[name="job-title[]"]').value || "",
-        company: entry.querySelector('input[name="company[]"]').value || "",
-        descriptions: entry
-          .querySelector('textarea[name="experience-descriptions[]"]')
-          .value.split("\n")
-          .map((desc) => desc.trim()),
-      })
-    ),
+    current_position: document.getElementById("current-position").value || "",
   };
   return data;
 }
@@ -258,3 +262,46 @@ document.querySelectorAll("input, textarea").forEach((field) => {
     localStorage.setItem("formData", JSON.stringify(getFormData()));
   });
 });
+
+// Add save functionality
+async function saveFormData() {
+  // Get the filename from localStorage
+  const uploadedFile = localStorage.getItem("uploadedFile");
+  
+  if (!uploadedFile) {
+    alert('Please upload a CV file first');
+    return;
+  }
+
+  try {
+    const response = await fetch('/save_form', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        filename: uploadedFile,
+        formData: getFormData()
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to save form data');
+    }
+
+    const result = await response.json();
+  } catch (error) {
+    console.error('Error saving form data:', error);
+
+  }
+}
+
+// Store filename when file is uploaded
+document.getElementById("file-input").addEventListener("change", function(e) {
+  if (e.target.files.length > 0) {
+    localStorage.setItem("uploadedFile", e.target.files[0].name.replace(/\.[^/.]+$/, "") + ".json");
+  }
+});
+
+// Add save button event listener
+document.getElementById("save-cv").addEventListener("click", saveFormData);

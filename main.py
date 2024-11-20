@@ -187,6 +187,39 @@ async def generate_cv(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/check_json/{filename}")
+async def check_json(filename: str):
+    """Check if a JSON file exists and return its contents if it does"""
+    try:
+        json_path = f"outputs/{filename}"
+        if os.path.exists(json_path):
+            with open(json_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        else:
+            raise HTTPException(status_code=404, detail="File not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/save_form")
+async def save_form(data: dict):
+    try:
+        # Get the filename from the data
+        filename = data.get("filename")
+        if not filename:
+            raise HTTPException(status_code=400, detail="Filename not provided")
+            
+        # Ensure the outputs directory exists
+        os.makedirs("outputs", exist_ok=True)
+        
+        # Save the form data to the JSON file
+        output_location = f"outputs/{filename}"
+        with open(output_location, "w", encoding='utf-8') as json_file:
+            json.dump(data["formData"], json_file, indent=2)
+            
+        return {"message": "Form data saved successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000)

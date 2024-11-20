@@ -402,31 +402,45 @@ document.addEventListener("DOMContentLoaded", function () {
   function getFormData() {
     const data = {
       profile: {
-        name: document.getElementById("name").value,
-        email: document.getElementById("email").value,
-        phone: document.getElementById("phone").value,
-        location: document.getElementById("location").value,
-        url: document.getElementById("url").value,
-        summary: document.getElementById("summary").value,
+        name: document.getElementById("name").value || "",
+        email: document.getElementById("email").value || "",
+        phone: document.getElementById("phone").value || "",
+        location: document.getElementById("location").value || "",
+        url: document.getElementById("url").value || "",
+        summary: document.getElementById("summary").value || "",
       },
-      skills: document
-        .getElementById("skills")
-        .value.split(",")
-        .map((skill) => skill.trim()),
-      current_position: document.getElementById("current-position").value,
-      education: Array.from(document.querySelectorAll(".education-entry")).map(
+      experience: Array.from(document.querySelectorAll(".experience-entry")).map(
         (entry) => ({
-          date:
-            entry.querySelector('input[name="education-date[]"]').value || "",
-          degree: entry.querySelector('input[name="degree[]"]').value || "",
-          school: entry.querySelector('input[name="school[]"]').value || "",
-          gpa: entry.querySelector('input[name="gpa[]"]').value || "",
+          company: entry.querySelector('input[name="company[]"]').value || "",
+          job_title: entry.querySelector('input[name="job-title[]"]').value || "",
+          date: entry.querySelector('input[name="experience-date[]"]').value ||
+            "",
           descriptions: entry
-            .querySelector('textarea[name="education-descriptions[]"]')
+            .querySelector('textarea[name="experience-descriptions[]"]')
             .value.split("\n")
+            .filter((desc) => desc.trim() !== "")
             .map((desc) => desc.trim()),
         })
       ),
+      education: Array.from(document.querySelectorAll(".education-entry")).map(
+        (entry) => ({
+          school: entry.querySelector('input[name="school[]"]').value || "",
+          degree: entry.querySelector('input[name="degree[]"]').value || "",
+          gpa: entry.querySelector('input[name="gpa[]"]').value || "",
+          date: entry.querySelector('input[name="education-date[]"]').value ||
+            "",
+          descriptions: entry
+            .querySelector('textarea[name="education-descriptions[]"]')
+            .value.split("\n")
+            .filter((desc) => desc.trim() !== "")
+            .map((desc) => desc.trim()),
+        })
+      ),
+      skills: document
+        .getElementById("skills")
+        .value.split(",")
+        .map((skill) => skill.trim())
+        .filter((skill) => skill !== ""),
       languages: Array.from(document.querySelectorAll(".language-entry")).map(
         (entry) => ({
           language: entry.querySelector('input[name="language[]"]').value || "",
@@ -434,18 +448,7 @@ document.addEventListener("DOMContentLoaded", function () {
             entry.querySelector('input[name="proficiency[]"]').value || "",
         })
       ),
-      experience: Array.from(
-        document.querySelectorAll(".experience-entry")
-      ).map((entry) => ({
-        date:
-          entry.querySelector('input[name="experience-date[]"]').value || "",
-        job_title: entry.querySelector('input[name="job-title[]"]').value || "",
-        company: entry.querySelector('input[name="company[]"]').value || "",
-        descriptions: entry
-          .querySelector('textarea[name="experience-descriptions[]"]')
-          .value.split("\n")
-          .map((desc) => desc.trim()),
-      })),
+      current_position: document.getElementById("current-position").value || "",
     };
     return data;
   }
@@ -456,8 +459,9 @@ document.addEventListener("DOMContentLoaded", function () {
       localStorage.setItem("formData", JSON.stringify(getFormData()));
     });
   });
-  
+
   function clearLocalStorage() {
+    localStorage.removeItem("uploadedFile");
     localStorage.removeItem("formData");
     // Reset form fields
     document.getElementById("name").value = "";
@@ -468,25 +472,25 @@ document.addEventListener("DOMContentLoaded", function () {
     document.getElementById("summary").value = "";
     document.getElementById("skills").value = "";
     document.getElementById("current-position").value = "";
-  
+
     // Reset education entries
     const educationContainer = document.getElementById("education-container");
     educationContainer.innerHTML = "";
     addEducationEntry();
-  
+
     // Reset experience entries
     const experienceContainer = document.getElementById("experience-container");
     experienceContainer.innerHTML = "";
     addExperienceEntry();
-  
+
     // Reset language entries
     const languagesContainer = document.getElementById("languages-container");
     languagesContainer.innerHTML = "";
     addLanguageEntry();
-    
+
     // Clear file input
     document.getElementById("file-input").value = "";
-  
+
     updatePreview();
   }
 
