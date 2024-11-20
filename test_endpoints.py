@@ -19,7 +19,7 @@ logging.basicConfig(level=logging.INFO)
 
 def test_generate_cv_and_json():
     # List of test CV files
-    
+    '''
     test_files = [
         "CV_HU_GuttmannAndras.docx.pdf",
         "CV_HUN_Szomszed_Norbert.pdf",
@@ -27,8 +27,8 @@ def test_generate_cv_and_json():
         "Richard-3.pdf",
         "TothJozsef_CV_HU.pdf",
     ]
-
     '''
+
     test_files = [
         "My-CV-Simple.pdf",
         "Konyves_Lajos_CV_EN_.pdf",
@@ -39,7 +39,6 @@ def test_generate_cv_and_json():
         "Ussayed_Resume-Simple.pdf",
         "My-CV.pdf"
     ]
-    '''
     
     output_dir = "outputs"
     os.makedirs(output_dir, exist_ok=True)

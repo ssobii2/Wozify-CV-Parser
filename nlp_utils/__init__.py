@@ -14,26 +14,14 @@ from langdetect import detect
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
-# Load English and Hungarian models
-try:
-    nlp_en = spacy.load('en_core_web_sm')
-    nlp_hu = huspacy.load('hu_core_news_md')
-    
-    # Add special case patterns for Hungarian characters and common abbreviations
-    special_cases = [{
-        'ORTH': word
-    } for word in ['Kft.', 'Zrt.', 'Bt.', 'Nyrt.', 'dr.', 'Dr.', 'id.', 'ifj.']]
-    
-    for case in special_cases:
-        nlp_hu.tokenizer.add_special_case(case['ORTH'], [case])
-except Exception as e:
-    print(f"Error loading NLP models: {str(e)}")
-    raise
+# Load spaCy models
+nlp_en = spacy.load('en_core_web_sm')
+nlp_hu = huspacy.load('hu_core_news_md')
 
 class CVExtractor:
     def __init__(self):
         self.profile_extractor = ProfileExtractor(nlp_en, nlp_hu)
-        self.education_extractor = EducationExtractor(nlp_en, nlp_hu)
+        self.education_extractor = EducationExtractor(nlp_en)
         self.education_extractor_hu = EducationExtractorHu(nlp_hu)
         self.experience_extractor = ExperienceExtractor(nlp_en)
         self.experience_extractor_hu = ExperienceExtractorHu(nlp_hu)
