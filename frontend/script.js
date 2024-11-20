@@ -1,7 +1,25 @@
 let formData = new FormData();
 
-document.getElementById("upload-form").addEventListener("submit", function (e) {
-  e.preventDefault();
+async function checkJsonExists(filename) {
+  try {
+    const response = await fetch(`/check_json/${encodeURIComponent(filename)}`);
+    if (response.status === 404) {
+      return { exists: false };
+    }
+    if (!response.ok) {
+      console.error('Error checking JSON:', await response.text());
+      return { exists: false };
+    }
+    const data = await response.json();
+    return { exists: true, data };
+  } catch (error) {
+    console.error('Error checking JSON:', error);
+    return { exists: false };
+  }
+}
+
+document.getElementById("upload-form").addEventListener("submit", async function (e) {
+  e.preventDefault(); // Prevent form from submitting normally
   const fileInput = document.getElementById("file-input");
   const file = fileInput.files[0];
   if (!file) {
@@ -9,6 +27,27 @@ document.getElementById("upload-form").addEventListener("submit", function (e) {
     return;
   }
 
+  const jsonFilename = file.name.replace(/\.[^/.]+$/, "") + ".json";
+  const jsonCheck = await checkJsonExists(jsonFilename);
+  
+  if (jsonCheck.exists && jsonCheck.data) {
+    // If JSON exists and we have valid data, use it
+    try {
+      if (typeof window.populateFields === 'function') {
+        window.populateFields(jsonCheck.data);
+        window.updatePreview(); // Update preview after populating from JSON
+        console.log('Form populated from existing JSON file');
+        return; // Stop here, don't proceed with form submission
+      } else {
+        console.error('populateFields function not found');
+      }
+    } catch (error) {
+      console.error('Error loading JSON data:', error);
+    }
+  }
+
+  // Only proceed with form submission if JSON doesn't exist or failed to load
+  formData = new FormData(); // Reset formData
   formData.append("file", file);
 
   // Process education entries
@@ -67,7 +106,28 @@ document.getElementById("upload-form").addEventListener("submit", function (e) {
     );
   });
 
-  console.log("File selected:", file.name);
+  // Only make the process request if we're actually processing a new CV
+  try {
+    const response = await fetch('/process', {
+      method: 'POST',
+      body: formData
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to process CV');
+    }
+    
+    const result = await response.json();
+    console.log('CV processed successfully:', result);
+    
+    // Populate form with the processed data and update preview
+    if (result.data && typeof window.populateFields === 'function') {
+      window.populateFields(result.data);
+      window.updatePreview(); // Update preview after populating from processed data
+    }
+  } catch (error) {
+    console.error('Error processing CV:', error);
+  }
 });
 
 function addEducationEntry() {

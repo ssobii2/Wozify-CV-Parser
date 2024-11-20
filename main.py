@@ -192,13 +192,24 @@ async def check_json(filename: str):
     """Check if a JSON file exists and return its contents if it does"""
     try:
         json_path = f"outputs/{filename}"
-        if os.path.exists(json_path):
-            with open(json_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        else:
+        if not os.path.exists(json_path):
             raise HTTPException(status_code=404, detail="File not found")
+        
+        try:
+            with open(json_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                return data
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=500, detail="Invalid JSON file")
+        except UnicodeDecodeError:
+            raise HTTPException(status_code=500, detail="File encoding error")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error reading file: {str(e)}")
+            
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 @app.post("/save_form")
 async def save_form(data: dict):

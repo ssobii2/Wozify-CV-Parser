@@ -132,37 +132,6 @@ document.addEventListener("DOMContentLoaded", function () {
     field.addEventListener("input", updatePreview);
   });
 
-  uploadForm.addEventListener("submit", function (e) {
-    e.preventDefault();
-    const fileInput = document.getElementById("file-input");
-    const file = fileInput.files[0];
-
-    if (!file) {
-      alert("Please select a file!");
-      return;
-    }
-
-    const formData = new FormData();
-    formData.append("file", file);
-
-    fetch("http://127.0.0.1:8000/process", {
-      method: "POST",
-      body: formData,
-    })
-      .then((response) => response.json())
-      .then((data) => {
-        if (data.error) {
-          resultDiv.innerText = `Error: ${data.error}`;
-        } else {
-          populateFields(data.data);
-          updatePreview();
-        }
-      })
-      .catch((error) => {
-        console.error("Error:", error);
-      });
-  });
-
   document.getElementById("save-cv").addEventListener("click", function () {
     const element = document.getElementById("cv-preview").contentDocument.body;
 
@@ -194,7 +163,8 @@ document.addEventListener("DOMContentLoaded", function () {
       .catch((error) => console.error("Error fetching CSS:", error));
   });
 
-  function populateFields(storedData) {
+  // Export populateFields function to make it available globally
+  window.populateFields = function (storedData) {
     const data = storedData || {};
     data.profile = data.profile || {};
     data.skills = data.skills || [];
@@ -245,7 +215,7 @@ document.addEventListener("DOMContentLoaded", function () {
         input.addEventListener("input", updatePreview);
       });
     });
-  }
+  };
 
   function createEducationEntry(edu, isFirst) {
     const entry = document.createElement("div");
