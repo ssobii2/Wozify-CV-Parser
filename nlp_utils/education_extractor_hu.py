@@ -6,34 +6,59 @@ class EducationExtractorHu:
     def __init__(self, nlp_hu):
         self.nlp_hu = nlp_hu
         self.SCHOOLS = [
-            'Egyetem', 'Főiskola', 'Iskola', 'Gimnázium', 'Szakközépiskola', 'Technikum'
+            'Egyetem', 'Főiskola', 'Iskola', 'Gimnázium', 'Szakközépiskola', 'Technikum',
+            'Kar', 'Intézet', 'Akadémia'
         ]
         
         self.DEGREES = [
-            'Mrnök', 'Diploma', 'Technikus', 'Érettségi', 'Szakképzés'
+            'Mérnök', 'Diploma', 'Technikus', 'Érettségi', 'Szakképzés', 'BSc', 'MSc', 'PhD',
+            'Alapképzés', 'Mesterképzés', 'Doktori', 'Oklevél', 'Bizonyítvány', 'OKJ',
+            'Felsőfokú', 'Középfokú', 'Alapfokú'
+        ]
+
+        self.DEGREE_FIELDS = [
+            'Informatika', 'Programtervező', 'Gazdasági', 'Műszaki', 'Gépész', 'Villamos',
+            'Közgazdász', 'Matematika', 'Fizika', 'Kémia', 'Biológia', 'Környezetvédelem',
+            'Kommunikáció', 'Marketing', 'Menedzsment', 'Logisztika', 'Turizmus'
+        ]
+
+        self.NON_EDUCATION_KEYWORDS = [
+            'windows', 'ms office', 'sap', 'nyelv', 'német', 'angol', 'francia', 'orosz',
+            'fejlesztő', 'programozó', 'tapasztalat', 'év'
         ]
 
         self.section_headers = {
-            'education': ['tanulmányok', 'képzettség', 'iskolai végzettség', 'végzettség']
+            'education': ['tanulmányok', 'képzettség', 'iskolai végzettség', 'végzettség', 'oktatás']
         }
 
         self.education_keywords = [
             'egyetem', 'főiskola', 'iskola', 'intézet', 'akadémia', 'diploma', 'képzés',
-            'tanfolyam', 'program', 'bizonyítvány', 'szakképzés', 'továbbképzés'
+            'tanfolyam', 'program', 'bizonyítvány', 'szakképzés', 'továbbképzés', 'kar'
         ]
 
         self.date_patterns = [
-            r'(Jan(?:uár)?|Feb(?:ruár)?|Már(?:cius)?|Ápr(?:ilis)?|Máj(?:us)?|Jún(?:ius)?|'
-            r'Júl(?:ius)?|Aug(?:usztus)?|Szep(?:tember)?|Okt(?:óber)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{4}',
-            r'\d{1,2}/\d{1,2}/\d{2,4}',
-            r'\d{4}',
-            r'\d{2}\.\d{2}\.\d{4}',
-            r'\d{4}/\d{2}/\d{2}',
-            r'\d{2}/\d{2}/\d{4}',
-            r'(Nyár|Ősz|Tél|Tavasz) \d{4}',
-            r'\d{1,2}\.\s*(?:Jan(?:uár)?|Feb(?:ruár)?|Már(?:cius)?|Ápr(?:ilis)?|Máj(?:us)?|Jún(?:ius)?|'
-            r'Júl(?:ius)?|Aug(?:usztus)?|Szep(?:tember)?|Okt(?:óber)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{4}'
+            r'(\d{4})\s*[-–]\s*(\d{4})',  # 2002-2007
+            r'(\d{4})\s*[-–]\s*(?:jelen|folyamatban)',  # 2002-present
+            r'(\d{4})\.',  # 2004.
+            r'(\d{4})',  # Just year
         ]
+
+        self.gpa_patterns = [
+            r'([1-5][.,]\d{1,2})',  # 4.5, 4,5
+            r'(jeles|kitűnő|kiváló|jó|közepes|elégséges)',  # Text-based grades
+            r'summa cum laude|cum laude',  # Latin honors
+        ]
+
+        self.gpa_mapping = {
+            'jeles': '5.0',
+            'kitűnő': '5.0',
+            'kiváló': '5.0',
+            'jó': '4.0',
+            'közepes': '3.0',
+            'elégséges': '2.0',
+            'summa cum laude': '5.0',
+            'cum laude': '4.5'
+        }
 
     def extract_section(self, text: str) -> List[str]:
         """Extract education section from Hungarian text."""
@@ -88,43 +113,56 @@ class EducationExtractorHu:
             
         return False
     
-    def extract_gpa(self, text: str) -> Optional[str]:
-        doc = self.nlp_hu(text)
+    def extract_degree(self, text: str) -> str:
+        """Extract degree information from text."""
+        text_lower = text.lower()
         
-        # Check for Hungarian grade notation
-        grade_match = re.search(r'(?:Note|Jegy|Minősítés|Eredmény):\s*([\w]+)', text, re.IGNORECASE)
-        if grade_match:
-            grade = grade_match.group(1)
-            grade_map = {
-                'kitűnő': '5.0',
-                'jeles': '5.0',
-                'jó': '4.0',
-                'közepes': '3.0',
-                'elégséges': '2.0'
-            }
-            return grade_map.get(grade.lower(), grade)
+        # First check for degree types
+        for degree in self.DEGREES:
+            if degree.lower() in text_lower:
+                # Try to find associated field
+                for field in self.DEGREE_FIELDS:
+                    if field.lower() in text_lower:
+                        return f"{degree} {field}"
+                return degree
         
-        # Fallback to numerical GPA
-        for ent in doc.ents:
-            if ent.label_ == "CARDINAL" and re.match(r'^[0-5]\.\d{1,2}$', ent.text):
-                return ent.text
+        # Check for field-specific degrees
+        for field in self.DEGREE_FIELDS:
+            if field.lower() in text_lower:
+                if any(keyword in text_lower for keyword in ['szak', 'szakirány', 'képzés']):
+                    return f"{field} szak"
         
-        return None
+        return ""
 
-    def extract_date(self, text: str) -> Optional[str]:
-        doc = self.nlp_hu(text)
-        for ent in doc.ents:
-            if ent.label_ == "DATE":
-                year_match = re.search(r'(19|20)\d{2}', ent.text)
-                return year_match.group(0) if year_match else ent.text
-
-        for pattern in self.date_patterns:
-            match = re.search(pattern, text)
+    def extract_gpa(self, text: str) -> str:
+        """Extract GPA or grade information from text."""
+        text_lower = text.lower()
+        
+        # Check for numeric GPA
+        for pattern in self.gpa_patterns:
+            match = re.search(pattern, text_lower)
             if match:
-                year = re.search(r'(19|20)\d{2}', match.group(0))
-                return year.group(0) if year else match.group(0)
+                grade = match.group(1)
+                # Convert text-based grades to numeric
+                if grade in self.gpa_mapping:
+                    return self.gpa_mapping[grade]
+                # Clean up numeric grades
+                if re.match(r'[1-5][.,]\d{1,2}', grade):
+                    return grade.replace(',', '.')
+        
+        return ""
 
-        return None
+    def extract_date(self, text: str) -> str:
+        """Extract the earliest date from text."""
+        all_dates = []
+        for pattern in self.date_patterns:
+            matches = re.finditer(pattern, text)
+            for match in matches:
+                # Extract first group if it exists, otherwise take the whole match
+                date = match.group(1) if match.groups() else match.group(0)
+                all_dates.append(date.strip())
+        
+        return min(all_dates) if all_dates else ""
 
     def extract_date_range(self, text: str) -> Optional[str]:
         doc = self.nlp_hu(text)
@@ -138,6 +176,25 @@ class EducationExtractorHu:
                 return ' - '.join(matches)
 
         return None
+
+    def extract_descriptions(self, text: str) -> List[str]:
+        """Extract relevant descriptions from education entry."""
+        descriptions = []
+        doc = self.nlp_hu(text)
+        
+        # Split into sentences and analyze each
+        for sent in doc.sents:
+            sent_text = sent.text.strip()
+            
+            # Skip if sentence is too short or contains unwanted keywords
+            if len(sent_text) < 5 or any(keyword.lower() in sent_text.lower() for keyword in self.NON_EDUCATION_KEYWORDS):
+                continue
+            
+            # Check if sentence contains relevant information
+            if any(keyword.lower() in sent_text.lower() for keyword in self.DEGREE_FIELDS + ['specializáció', 'szakirány', 'tanulmányok']):
+                descriptions.append(sent_text)
+        
+        return descriptions
 
     def extract_education_descriptions(self, text: str) -> List[str]:
         """Extract detailed education descriptions using NLP and dependency parsing."""
@@ -160,89 +217,64 @@ class EducationExtractorHu:
 
         return descriptions
 
+    def clean_school_name(self, text: str) -> str:
+        """Clean school name by removing dates and unnecessary information."""
+        # Remove dates
+        for pattern in self.date_patterns:
+            text = re.sub(pattern, '', text)
+        
+        # Remove bullet points and special characters at start
+        text = re.sub(r'^[\s•\-\u2022\uf0b7]+', '', text)
+        
+        # Split by common separators and take the meaningful part
+        parts = re.split(r'\s*[\|,]\s*', text)
+        text = parts[0] if parts else text
+        
+        return text.strip()
+
+    def is_valid_education(self, text: str) -> bool:
+        """Check if the text represents valid education information."""
+        text_lower = text.lower()
+        
+        # Check for non-education keywords
+        if any(keyword.lower() in text_lower for keyword in self.NON_EDUCATION_KEYWORDS):
+            return False
+            
+        # Must contain either a school keyword or education keyword
+        has_school_keyword = any(school.lower() in text_lower for school in self.SCHOOLS)
+        has_education_keyword = any(keyword in text_lower for keyword in self.education_keywords)
+        
+        return has_school_keyword or has_education_keyword
+
     def extract_education(self, text: str) -> List[Dict]:
-        """Extract detailed education information."""
-        education_data = []
+        """Extract education information from text."""
+        education_entries = []
+        section_lines = self.extract_section(text)
+        
         current_entry = None
         
-        # Extract education section using section_headers
-        education_lines = self.extract_section(text)
-        
-        if education_lines:
-            for line in education_lines:
-                # Skip section headers
-                if any(header in line.lower() for header in self.section_headers['education']):
-                    continue
-                
-                # Start new entry if school or significant education keyword found
-                if self.has_school(line) or any(keyword in line.lower() for keyword in ['diploma', 'érettségi', 'végzettség', 'szakképesítés']):
-                    if current_entry and (current_entry['school'] or current_entry['degree']):
-                        education_data.append(current_entry)
-                    
-                    current_entry = {
-                        'school': line if self.has_school(line) else '',
-                        'degree': '',
-                        'gpa': '',
-                        'date': self.extract_date(line) or '',
-                        'descriptions': self.extract_education_descriptions(line)
-                    }
-                    continue
-                
-                if current_entry is None:
-                    current_entry = {
-                        'school': '',
-                        'degree': '',
-                        'gpa': '',
-                        'date': '',
-                        'descriptions': []
-                    }
-                
-                # Extract degree
-                if self.has_degree(line) and not current_entry['degree']:
-                    current_entry['degree'] = line
-                    gpa = self.extract_gpa(line)
-                    if gpa:
-                        current_entry['gpa'] = gpa
-                    continue
-                
-                # Extract date if not found
-                if not current_entry['date']:
-                    date = self.extract_date(line)
-                    if date:
-                        current_entry['date'] = date
-                        continue
-                
-                # Extract GPA if not found
-                if not current_entry['gpa']:
-                    gpa = self.extract_gpa(line)
-                    if gpa:
-                        current_entry['gpa'] = gpa
-                        continue
-                
-                # Add to descriptions if not already present
-                if line not in [current_entry['school'], current_entry['degree']]:
-                    current_entry['descriptions'].extend(self.extract_education_descriptions(line))
+        for line in section_lines:
+            line = line.strip()
+            if not line:
+                continue
             
-            # Don't forget to add the last entry
-            if current_entry and (current_entry['school'] or current_entry['degree']):
-                education_data.append(current_entry)
+            # Skip if line contains non-education information
+            if not self.is_valid_education(line):
+                continue
+            
+            # Create new education entry
+            entry = {
+                "school": self.clean_school_name(line),
+                "degree": self.extract_degree(line),
+                "gpa": self.extract_gpa(line),
+                "date": self.extract_date(line),
+                "descriptions": self.extract_descriptions(line)
+            }
+            
+            if entry["school"] or entry["degree"]:
+                education_entries.append(entry)
         
-        # Clean up entries
-        for entry in education_data:
-            entry['descriptions'] = [
-                desc for desc in entry['descriptions']
-                if desc and not any([
-                    desc == entry['school'],
-                    desc == entry['degree'],
-                    self.extract_date(desc) == entry['date'],
-                    self.extract_gpa(desc) == entry['gpa']
-                ])
-            ]
+        # Sort entries by date (most recent first)
+        education_entries.sort(key=lambda x: x["date"] if x["date"] else "0", reverse=True)
         
-        return education_data if education_data else [{
-            'school': '',
-            'degree': '',
-            'gpa': '',
-            'date': '',
-            'descriptions': []
-        }]
+        return education_entries if education_entries else []
