@@ -6,3 +6,19 @@
 2024-11-22 15:14:09,303 - INFO - Results saved to: outputs/Konyves_Lajos_CV_EN_.json
 2024-11-22 15:14:09,304 - INFO - Cleaned up temporary file: uploads/Konyves_Lajos_CV_EN_.pdf
 2024-11-22 15:14:09,304 - INFO - Completed process_file in 2.43 seconds
+2024-11-22 15:14:39,784 - INFO - Starting process_file
+2024-11-22 15:14:39,784 - INFO - Processing file: CV_HU_GuttmannAndras.docx.pdf
+2024-11-22 15:14:39,784 - INFO - File saved to: uploads/CV_HU_GuttmannAndras.docx.pdf
+2024-11-22 15:14:39,923 - INFO - File parsing completed
+2024-11-22 15:14:42,977 - INFO - NLP extraction completed
+2024-11-22 15:14:42,977 - INFO - Results saved to: outputs/CV_HU_GuttmannAndras.docx.json
+2024-11-22 15:14:42,977 - INFO - Cleaned up temporary file: uploads/CV_HU_GuttmannAndras.docx.pdf
+2024-11-22 15:14:42,977 - INFO - Completed process_file in 3.19 seconds
+2024-11-22 15:14:48,812 - INFO - Starting process_file
+2024-11-22 15:14:48,812 - INFO - Processing file: My-CV-Simple.pdf
+2024-11-22 15:14:48,812 - INFO - File saved to: uploads/My-CV-Simple.pdf
+2024-11-22 15:14:48,886 - INFO - File parsing completed
+2024-11-22 15:14:49,335 - INFO - NLP extraction completed
+2024-11-22 15:14:49,335 - INFO - Results saved to: outputs/My-CV-Simple.json
+2024-11-22 15:14:49,335 - INFO - Cleaned up temporary file: uploads/My-CV-Simple.pdf
+2024-11-22 15:14:49,335 - INFO - Completed process_file in 0.52 seconds
