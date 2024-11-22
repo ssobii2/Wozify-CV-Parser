@@ -14,6 +14,63 @@ from nlp_utils import (
 from jinja2 import Environment, FileSystemLoader
 import pdfkit
 import tempfile
+import logging
+import time
+from functools import wraps
+import asyncio
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('app.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
+def log_time(func):
+    """Decorator to log function execution time"""
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        start_time = time.time()
+        logger.info(f"Starting {func.__name__}")
+        try:
+            result = await func(*args, **kwargs)
+            execution_time = time.time() - start_time
+            logger.info(f"Completed {func.__name__} in {execution_time:.2f} seconds")
+            return result
+        except Exception as e:
+            execution_time = time.time() - start_time
+            logger.error(f"Error in {func.__name__} after {execution_time:.2f} seconds: {str(e)}")
+            raise
+    return wrapper
+
+async def process_with_timeout(file_location):
+    """Process file with timeout"""
+    try:
+        # Parse the file with a timeout of 60 seconds
+        text_content = await asyncio.wait_for(
+            asyncio.get_event_loop().run_in_executor(None, parse_file, file_location),
+            timeout=60.0
+        )
+        logger.info("File parsing completed")
+        
+        # Extract data using NLP with a timeout of 120 seconds
+        extracted_data = await asyncio.wait_for(
+            asyncio.get_event_loop().run_in_executor(None, cv_extractor.extract_entities, text_content),
+            timeout=120.0
+        )
+        logger.info("NLP extraction completed")
+        
+        return extracted_data
+    except asyncio.TimeoutError:
+        logger.error("Processing timeout exceeded")
+        raise HTTPException(status_code=408, detail="Processing timeout exceeded")
+    except Exception as e:
+        logger.error(f"Error in process_with_timeout: {str(e)}")
+        raise
 
 app = FastAPI()
 cv_extractor = CVExtractor()
@@ -67,6 +124,7 @@ async def upload_file(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/process")
+@log_time
 async def process_file(file: UploadFile = File(...)):
     # Validate file type
     ALLOWED_EXTENSIONS = ['.pdf', '.docx', '.jpg', '.jpeg', '.png']
@@ -74,9 +132,13 @@ async def process_file(file: UploadFile = File(...)):
     file_ext = os.path.splitext(filename)[1].lower()
     
     if file_ext not in ALLOWED_EXTENSIONS:
+        logger.warning(f"Unsupported file type: {file_ext}")
         raise HTTPException(status_code=400, detail="Unsupported file type")
     
+    file_location = None
     try:
+        logger.info(f"Processing file: {filename}")
+        
         # Create uploads directory if it doesn't exist
         os.makedirs("uploads", exist_ok=True)
         
@@ -84,12 +146,10 @@ async def process_file(file: UploadFile = File(...)):
         file_location = f"uploads/{filename}"
         with open(file_location, "wb") as f:
             shutil.copyfileobj(file.file, f)
+        logger.info(f"File saved to: {file_location}")
         
-        # Parse the file
-        text_content = parse_file(file_location)
-        
-        # Extract data using NLP
-        extracted_data = cv_extractor.extract_entities(text_content)
+        # Process file with timeout
+        extracted_data = await process_with_timeout(file_location)
         
         # Create outputs directory if it doesn't exist
         os.makedirs("outputs", exist_ok=True)
@@ -98,17 +158,20 @@ async def process_file(file: UploadFile = File(...)):
         output_location = f"outputs/{os.path.splitext(filename)[0]}.json"
         with open(output_location, "w", encoding='utf-8') as json_file:
             json.dump(extracted_data, json_file, indent=2)
+        logger.info(f"Results saved to: {output_location}")
         
         return {"data": extracted_data}
     
     except Exception as e:
-        print(f"Error in process_file: {str(e)}")  # Debug print
-        raise HTTPException(status_code=500, detail=str(e))
+        error_msg = f"Error processing file {filename}: {str(e)}"
+        logger.error(error_msg)
+        raise HTTPException(status_code=500, detail=error_msg)
     
     finally:
         # Clean up uploaded file
-        if os.path.exists(file_location):
+        if file_location and os.path.exists(file_location):
             os.remove(file_location)
+            logger.info(f"Cleaned up temporary file: {file_location}")
 
 @app.post("/generate")
 async def generate_cv(file: UploadFile = File(...)):

@@ -1,0 +1,8 @@
+2024-11-22 15:14:06,871 - INFO - Starting process_file
+2024-11-22 15:14:06,872 - INFO - Processing file: Konyves_Lajos_CV_EN_.pdf
+2024-11-22 15:14:06,872 - INFO - File saved to: uploads/Konyves_Lajos_CV_EN_.pdf
+2024-11-22 15:14:07,069 - INFO - File parsing completed
+2024-11-22 15:14:09,302 - INFO - NLP extraction completed
+2024-11-22 15:14:09,303 - INFO - Results saved to: outputs/Konyves_Lajos_CV_EN_.json
+2024-11-22 15:14:09,304 - INFO - Cleaned up temporary file: uploads/Konyves_Lajos_CV_EN_.pdf
+2024-11-22 15:14:09,304 - INFO - Completed process_file in 2.43 seconds
