@@ -10,17 +10,16 @@ class ExperienceExtractorHu:
         self.section_headers = {
             'experience': [
                 'munkatapasztalat', 'szakmai tapasztalat', 'munkatörténet', 'korábbi munkák',
-                'tapasztalat', 'foglalkoztatási előzmények', 'szakmai előzmények'
+                'tapasztalat', 'foglalkoztatási előzmények', 'szakmai előzmények', 'projektek', 'szakmai gyakorlat', 'munkahely'
             ]
         }
         
         self.job_indicators = [
-            'fejlesztő', 'mérnök', 'menedzser', 'tanácsadó', 'elemző', 
-            'szakértő', 'koordinátor', 'asszisztens', 'igazgató', 'vezető',
-            'gyakornok', 'képzés alatt álló', 'adminisztrátor', 'felügyelő'
+            'fejlesztő', 'mérnök', 'menedzser', 'tanácsadó', 'elemző', 'szakértő', 'koordinátor', 'asszisztens', 'igazgató', 'vezető',
+            'gyakornok', 'képzés alatt álló', 'adminisztrátor', 'felügyelő', 'informatikus', 'projektmenedzser', 'programozó', 'munkatárs', 'rendszergazda'
         ]
         
-        self.company_indicators = ['kft', 'zrt', 'bt', 'nyrt']
+        self.company_indicators = ['kft', 'zrt', 'bt', 'nyrt', 'ltd', 'gmbh']
 
         # Define date patterns for Hungarian date extraction
         self.date_patterns = [

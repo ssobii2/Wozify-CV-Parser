@@ -6,14 +6,11 @@ class EducationExtractorHu:
     def __init__(self, nlp_hu):
         self.nlp_hu = nlp_hu
         self.SCHOOLS = [
-            'Egyetem', 'Főiskola', 'Iskola', 'Gimnázium', 'Szakközépiskola', 'Technikum',
-            'Kar', 'Intézet', 'Akadémia'
+            'Egyetem', 'Főiskola', 'Iskola', 'Gimnázium', 'Szakközépiskola', 'Technikum'
         ]
         
         self.DEGREES = [
-            'Mérnök', 'Diploma', 'Technikus', 'Érettségi', 'Szakképzés', 'BSc', 'MSc', 'PhD',
-            'Alapképzés', 'Mesterképzés', 'Doktori', 'Oklevél', 'Bizonyítvány', 'OKJ',
-            'Felsőfokú', 'Középfokú', 'Alapfokú'
+            'Mérnök', 'Diploma', 'Technikus', 'Érettségi', 'Szakképzés', 'BSc', 'MSc'
         ]
 
         self.DEGREE_FIELDS = [
@@ -28,12 +25,12 @@ class EducationExtractorHu:
         ]
 
         self.section_headers = {
-            'education': ['tanulmányok', 'képzettség', 'iskolai végzettség', 'végzettség', 'oktatás']
+            'education': ['tanulmányok', 'képzettség', 'iskolai végzettség', 'végzettség', 'végzettségem']
         }
 
         self.education_keywords = [
             'egyetem', 'főiskola', 'iskola', 'intézet', 'akadémia', 'diploma', 'képzés',
-            'tanfolyam', 'program', 'bizonyítvány', 'szakképzés', 'továbbképzés', 'kar'
+            'tanfolyam', 'program', 'bizonyítvány', 'szakképzés', 'továbbképzés', 'vizsga'
         ]
 
         self.date_patterns = [
