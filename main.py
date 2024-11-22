@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 import shutil
+import platform
 import os
 import json
 from parsers import parse_file
@@ -91,8 +92,13 @@ app.mount("/assets", StaticFiles(directory="assets"), name="assets")
 app.mount("/outputs", StaticFiles(directory="outputs"), name="outputs")
 app.mount("/templates", StaticFiles(directory="templates"), name="templates")
 
-# Configure pdfkit
-config = pdfkit.configuration(wkhtmltopdf=r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe')
+# Determine wkhtmltopdf path based on OS
+if platform.system() == 'Windows':
+    wkhtmltopdf_path = r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe'
+else:  # Linux/Unix systems
+    wkhtmltopdf_path = r'/usr/bin/wkhtmltopdf'
+
+config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
 
 @app.get("/api")
 async def root():
