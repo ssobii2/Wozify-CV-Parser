@@ -1,5 +1,18 @@
 let formData = new FormData();
 
+// Add these helper functions at the top of your script.js
+function showLoading() {
+  document.querySelector('.spinner-overlay').classList.add('show');
+  const submitButton = document.querySelector('button[type="submit"]');
+  submitButton.disabled = true;
+}
+
+function hideLoading() {
+  document.querySelector('.spinner-overlay').classList.remove('show');
+  const submitButton = document.querySelector('button[type="submit"]');
+  submitButton.disabled = false;
+}
+
 async function checkJsonExists(filename) {
   try {
     const response = await fetch(`/check_json/${encodeURIComponent(filename)}`);
@@ -27,6 +40,8 @@ document.getElementById("upload-form").addEventListener("submit", async function
     return;
   }
 
+  showLoading(); // Show loading spinner and disable submit button
+
   const jsonFilename = file.name.replace(/\.[^/.]+$/, "") + ".json";
   const jsonCheck = await checkJsonExists(jsonFilename);
   
@@ -37,6 +52,7 @@ document.getElementById("upload-form").addEventListener("submit", async function
         window.populateFields(jsonCheck.data);
         window.updatePreview(); // Update preview after populating from JSON
         console.log('Form populated from existing JSON file');
+        hideLoading(); // Hide loading spinner and enable submit button
         return; // Stop here, don't proceed with form submission
       } else {
         console.error('populateFields function not found');
@@ -127,6 +143,9 @@ document.getElementById("upload-form").addEventListener("submit", async function
     }
   } catch (error) {
     console.error('Error processing CV:', error);
+    alert('An error occurred while processing the CV. Please try again.');
+  } finally {
+    hideLoading(); // Always hide loading spinner and enable submit button
   }
 });
 

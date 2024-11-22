@@ -9,7 +9,7 @@ class ExperienceExtractor:
             'experience': [
                 'experience', 'work experience', 'employment history', 'work history', 
                 'professional experience', 'job experience', 'career history', 
-                'previous employment', 'past roles', 'work background', 'employment record', 'work experiences'
+                'previous employment', 'past roles', 'work background', 'employment record', 'work experiences', 'project experience'
             ]
         }
         
