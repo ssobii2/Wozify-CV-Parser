@@ -353,6 +353,16 @@ async function saveFormData() {
   }
 
   try {
+    // Get form data and ensure CV ID is included
+    const formData = getFormData();
+    const cvId = document.getElementById("cv-id").value || currentCVId;
+    
+    // Add CV ID to profile section when saving
+    if (!formData.profile) {
+      formData.profile = {};
+    }
+    formData.profile.cv_id = cvId;
+
     const response = await fetch('/save_form', {
       method: 'POST',
       headers: {
@@ -360,7 +370,7 @@ async function saveFormData() {
       },
       body: JSON.stringify({
         filename: uploadedFile,
-        formData: getFormData()
+        formData: formData
       })
     });
 
@@ -371,7 +381,7 @@ async function saveFormData() {
     const result = await response.json();
   } catch (error) {
     console.error('Error saving form data:', error);
-
+    alert('Error saving form data');
   }
 }
 

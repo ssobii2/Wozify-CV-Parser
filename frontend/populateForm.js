@@ -22,9 +22,17 @@ document.addEventListener("DOMContentLoaded", function () {
   window.updatePreview = function () {
     fetchHtmlTemplate((html) => {
       const data = {
+        profile: {
+          cv_id: document.getElementById("cv-id").value || currentCVId,
+          name: document.getElementById("name").value || "",
+          email: document.getElementById("email").value || "",
+          phone: document.getElementById("phone").value || "",
+          location: document.getElementById("location").value || "",
+          url: document.getElementById("url").value || "",
+          summary: document.getElementById("summary").value || "",
+        },
         skills: document.getElementById("skills").value,
         current_position: document.getElementById("current-position").value,
-        summary: document.getElementById("summary").value,
         education: Array.from(
           document.querySelectorAll(".education-entry")
         ).map((entry) => ({
@@ -57,8 +65,7 @@ document.addEventListener("DOMContentLoaded", function () {
       };
 
       previewIframe.onload = () => {
-        const iframeDocument =
-          previewIframe.contentDocument || previewIframe.contentWindow.document;
+        const iframeDocument = previewIframe.contentDocument;
 
         // Update content in iframe using IDs
         iframeDocument.getElementById("skills-list").innerHTML = (
@@ -70,9 +77,11 @@ document.addEventListener("DOMContentLoaded", function () {
         iframeDocument.getElementById("job-title").textContent =
           data.current_position || "";
         iframeDocument.getElementById("personal-summary").textContent =
-          data.summary || "";
+          data.profile.summary || "";
 
-        iframeDocument.querySelector(".cv-id").textContent = currentCVId;
+        // Update CV ID in preview
+        iframeDocument.querySelector(".cv-id").textContent =
+          data.profile.cv_id || currentCVId;
 
         // Education
         const educationEntries =
@@ -126,8 +135,6 @@ document.addEventListener("DOMContentLoaded", function () {
     localStorage.setItem("formData", JSON.stringify(getFormData()));
   };
 
-  currentCVId = generateCvId();
-
   formFields.forEach((field) => {
     field.addEventListener("input", updatePreview);
   });
@@ -164,20 +171,33 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 
   // Export populateFields function to make it available globally
-  window.populateFields = function (storedData) {
-    const data = storedData || {};
-    data.profile = data.profile || {};
-    data.skills = data.skills || [];
-    data.education = data.education || [];
-    data.experience = data.experience || [];
-    data.languages = data.languages || [];
-    document.getElementById("name").value = data.profile.name || "";
-    document.getElementById("email").value = data.profile.email || "";
-    document.getElementById("phone").value = data.profile.phone || "";
-    document.getElementById("location").value = data.profile.location || "";
-    document.getElementById("url").value = data.profile.url || "";
-    document.getElementById("summary").value = data.profile.summary || "";
-    document.getElementById("skills").value = data.skills.join(", ") || "";
+  window.populateFields = function (data) {
+    if (!data) return;
+
+    // Populate profile fields
+    if (data.profile) {
+      document.getElementById("name").value = data.profile.name || "";
+      document.getElementById("email").value = data.profile.email || "";
+      document.getElementById("phone").value = data.profile.phone || "";
+      document.getElementById("location").value = data.profile.location || "";
+      document.getElementById("url").value = data.profile.url || "";
+      document.getElementById("summary").value = data.profile.summary || "";
+
+      // Set CV ID if it exists in saved data, otherwise generate new one
+      if (data.profile.cv_id) {
+        currentCVId = data.profile.cv_id;
+        document.getElementById("cv-id").value = currentCVId;
+      }
+    }
+
+    // Populate skills
+    if (data.skills) {
+      // Handle both array and string cases for skills
+      document.getElementById("skills").value = Array.isArray(data.skills) 
+        ? data.skills.join(", ")
+        : data.skills;
+    }
+
     document.getElementById("current-position").value = data.current_position || "";
 
     // Handle local storage data
@@ -370,8 +390,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Function to get the current form data
   function getFormData() {
-    const data = {
+    return {
       profile: {
+        cv_id: document.getElementById("cv-id").value || currentCVId,
         name: document.getElementById("name").value || "",
         email: document.getElementById("email").value || "",
         phone: document.getElementById("phone").value || "",
@@ -379,6 +400,8 @@ document.addEventListener("DOMContentLoaded", function () {
         url: document.getElementById("url").value || "",
         summary: document.getElementById("summary").value || "",
       },
+      skills: document.getElementById("skills").value || "",
+      current_position: document.getElementById("current-position").value || "",
       experience: Array.from(document.querySelectorAll(".experience-entry")).map(
         (entry) => ({
           company: entry.querySelector('input[name="company[]"]').value || "",
@@ -406,11 +429,6 @@ document.addEventListener("DOMContentLoaded", function () {
             .map((desc) => desc.trim()),
         })
       ),
-      skills: document
-        .getElementById("skills")
-        .value.split(",")
-        .map((skill) => skill.trim())
-        .filter((skill) => skill !== ""),
       languages: Array.from(document.querySelectorAll(".language-entry")).map(
         (entry) => ({
           language: entry.querySelector('input[name="language[]"]').value || "",
@@ -418,9 +436,7 @@ document.addEventListener("DOMContentLoaded", function () {
             entry.querySelector('input[name="proficiency[]"]').value || "",
         })
       ),
-      current_position: document.getElementById("current-position").value || "",
     };
-    return data;
   }
 
   // Update local storage whenever the form data changes
@@ -442,6 +458,10 @@ document.addEventListener("DOMContentLoaded", function () {
     document.getElementById("summary").value = "";
     document.getElementById("skills").value = "";
     document.getElementById("current-position").value = "";
+
+    // Clear CV ID without generating new one
+    currentCVId = null;
+    document.getElementById("cv-id").value = "";
 
     // Reset education entries
     const educationContainer = document.getElementById("education-container");
