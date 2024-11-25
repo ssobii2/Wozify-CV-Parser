@@ -148,83 +148,36 @@ class CVExtractor:
 
     def extract_entities(self, text: str) -> Dict:
         """Main method to extract all information from CV."""
-        extracted_data = {
-            'profile': {
-                'name': '',
-                'email': '',
-                'phone': '',
-                'location': '',
-                'url': '',
-                'summary': ''
-            },
-            'experience': [],
-            'education': [],
-            'skills': [],
-            'languages': [],
-            'current_position': ''
-        }
-        
+        # Detect language first
         try:
-            # Pre-process text
-            text = text.encode('utf-8', errors='ignore').decode('utf-8')
-            
-            # Get appropriate model and process text
-            nlp = self.get_nlp_model_for_text(text)
-            doc = self.safe_nlp_process(text, nlp)
-            
-            # Extract profile information
-            try:
-                profile_data = self.profile_extractor.extract_profile(text)
-                if profile_data:
-                    extracted_data['profile'] = profile_data
-            except Exception as e:
-                print(f"Warning: Error extracting profile: {str(e)}")
-            
-            # Extract work experience
-            try:
-                work_experience = self.extract_work_experience(text)
-                if work_experience:
-                    extracted_data['experience'] = work_experience
-            except Exception as e:
-                print(f"Warning: Error extracting work experience: {str(e)}")
-            
-            # Extract education
-            try:
-                education = self.extract_education(text)
-                if education:
-                    extracted_data['education'] = education
-            except Exception as e:
-                print(f"Warning: Error extracting education: {str(e)}")
-            
-            # Extract skills
-            try:
-                skills = self.skills_extractor.extract_skills(text)
-                if skills:
-                    extracted_data['skills'] = skills
-            except Exception as e:
-                print(f"Warning: Error extracting skills: {str(e)}")
-            
-            # Extract languages
-            try:
-                languages = self.language_extractor.extract_languages(text)
-                if languages:
-                    extracted_data['languages'] = languages
-            except Exception as e:
-                print(f"Warning: Error extracting languages: {str(e)}")
-            
-            # Extract current position
-            try:
-                current_position = self.current_position_extractor.extract_current_position(text, extracted_data.get('experience', []))
-                if current_position:
-                    extracted_data['current_position'] = current_position
-            except Exception as e:
-                print(f"Warning: Error extracting current position: {str(e)}")
-            
-            return extracted_data
-            
-        except Exception as e:
-            print(f"Error in extract_entities: {str(e)}")
-            return extracted_data
+            language = detect(text)
+        except:
+            language = 'en'
+        
+        # Get appropriate NLP model
+        nlp_model = self.get_nlp_model_for_text(text)
+        
+        # Process text with NLP model
+        doc = self.safe_nlp_process(text, nlp_model)
+        
+        # Extract all information
+        profile_data = self.profile_extractor.extract_profile(text)
+        current_position = self.extract_current_position(text)
+        education = self.extract_education(text)
+        experience = self.extract_work_experience(text)
+        skills = self.extract_skills(text)
+        languages = self.extract_languages(text)
+        
+        # Return extracted data with language information
+        return {
+            "language": language,  
+            "profile": profile_data,
+            "current_position": current_position,
+            "education": education,
+            "experience": experience,
+            "skills": skills,
+            "languages": languages
+        }
 
     def extract_work_experience(self, text: str) -> List[Dict]:
         """Extract detailed work experience information using ExperienceExtractor."""

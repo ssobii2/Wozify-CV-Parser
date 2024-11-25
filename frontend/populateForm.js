@@ -8,11 +8,18 @@ document.addEventListener("DOMContentLoaded", function () {
     "#upload-form input, #upload-form textarea"
   );
 
-  function fetchHtmlTemplate(callback) {
-    fetch(`/static/live_preview.html`)
+  function fetchHtmlTemplate(callback, language = 'en') {
+    const templateFile = language === 'hu' ? 'live_preview_hu.html' : 'live_preview.html';
+    fetch(`/static/${templateFile}`)
       .then((response) => response.text())
       .then((html) => callback(html))
-      .catch((error) => console.error("Error loading template:", error));
+      .catch((error) => {
+        console.error("Error loading template:", error);
+        // Fallback to English template if Hungarian template fails to load
+        if (language === 'hu') {
+          fetchHtmlTemplate(callback, 'en');
+        }
+      });
   }
 
   function generateCvId() {
@@ -20,6 +27,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   window.updatePreview = function () {
+    const detectedLanguage = document.querySelector('input[name="detected-language"]')?.value || 'en';
     fetchHtmlTemplate((html) => {
       const data = {
         profile: {
@@ -131,7 +139,7 @@ document.addEventListener("DOMContentLoaded", function () {
       };
 
       previewIframe.srcdoc = html;
-    });
+    }, detectedLanguage);
     localStorage.setItem("formData", JSON.stringify(getFormData()));
   };
 
@@ -174,6 +182,19 @@ document.addEventListener("DOMContentLoaded", function () {
   window.populateFields = function (data) {
     if (!data) return;
 
+    // Add hidden input for detected language if it doesn't exist
+    let detectedLanguageInput = document.querySelector('input[name="detected-language"]');
+    if (!detectedLanguageInput) {
+      detectedLanguageInput = document.createElement('input');
+      detectedLanguageInput.type = 'hidden';
+      detectedLanguageInput.name = 'detected-language';
+      document.getElementById('upload-form').appendChild(detectedLanguageInput);
+    }
+    detectedLanguageInput.value = data.language || 'en';
+
+    // Get language from the data
+    const detectedLanguage = detectedLanguageInput.value;
+
     // Populate profile fields
     if (data.profile) {
       document.getElementById("name").value = data.profile.name || "";
@@ -183,7 +204,7 @@ document.addEventListener("DOMContentLoaded", function () {
       document.getElementById("url").value = data.profile.url || "";
       document.getElementById("summary").value = data.profile.summary || "";
 
-      // Set CV ID if it exists in saved data, otherwise generate new one
+      // Set CV ID if it exists in saved data
       if (data.profile.cv_id) {
         currentCVId = data.profile.cv_id;
         document.getElementById("cv-id").value = currentCVId;
@@ -203,38 +224,43 @@ document.addEventListener("DOMContentLoaded", function () {
     // Handle local storage data
     const educationContainer = document.getElementById("education-container");
     educationContainer.innerHTML = "";
-    data.education.forEach((edu, index) => {
-      const newEducationEntry = createEducationEntry(edu, index === 0);
-      educationContainer.appendChild(newEducationEntry);
-      // Attach event listeners to dynamically created inputs
-      newEducationEntry.querySelectorAll("input, textarea").forEach((input) => {
-        input.addEventListener("input", updatePreview);
+    if (data.education && data.education.length > 0) {
+      data.education.forEach((edu, index) => {
+        const newEducationEntry = createEducationEntry(edu, index === 0);
+        educationContainer.appendChild(newEducationEntry);
       });
-    });
+    } else {
+      addEducationEntry();
+    }
 
     const experienceContainer = document.getElementById("experience-container");
     experienceContainer.innerHTML = "";
-    data.experience.forEach((exp, index) => {
-      const newExperienceEntry = createExperienceEntry(exp, index === 0);
-      experienceContainer.appendChild(newExperienceEntry);
-      // Attach event listeners to dynamically created inputs
-      newExperienceEntry
-        .querySelectorAll("input, textarea")
-        .forEach((input) => {
-          input.addEventListener("input", updatePreview);
-        });
-    });
+    if (data.experience && data.experience.length > 0) {
+      data.experience.forEach((exp, index) => {
+        const newExperienceEntry = createExperienceEntry(exp, index === 0);
+        experienceContainer.appendChild(newExperienceEntry);
+      });
+    } else {
+      addExperienceEntry();
+    }
 
     const languagesContainer = document.getElementById("languages-container");
     languagesContainer.innerHTML = "";
-    data.languages.forEach((lang, index) => {
-      const newLanguageEntry = createLanguageEntry(lang, index === 0);
-      languagesContainer.appendChild(newLanguageEntry);
-      // Attach event listeners to dynamically created inputs
-      newLanguageEntry.querySelectorAll("input, textarea").forEach((input) => {
-        input.addEventListener("input", updatePreview);
+    if (data.languages && data.languages.length > 0) {
+      data.languages.forEach((lang, index) => {
+        const newLanguageEntry = createLanguageEntry(lang, index === 0);
+        languagesContainer.appendChild(newLanguageEntry);
       });
-    });
+    } else {
+      addLanguageEntry();
+    }
+
+    // Update preview with the correct language template
+    fetchHtmlTemplate((html) => {
+      const previewIframe = document.getElementById("cv-preview");
+      previewIframe.srcdoc = html;
+      setTimeout(updatePreview, 100); // Update preview after template is loaded
+    }, detectedLanguage);
   };
 
   function createEducationEntry(edu, isFirst) {
@@ -243,38 +269,40 @@ document.addEventListener("DOMContentLoaded", function () {
     entry.innerHTML = `
             <div class="form-row">
                 <label for="school">School:</label>
-                <input type="text" name="school[]" value="${edu.school || ""}">
+                <input type="text" name="school[]" value="${edu?.school || ""}">
             </div>
             <div class="form-row">
                 <label for="degree">Degree:</label>
-                <input type="text" name="degree[]" value="${edu.degree || ""}">
+                <input type="text" name="degree[]" value="${edu?.degree || ""}">
             </div>
             <div class="form-row">
                 <label for="gpa">GPA:</label>
-                <input type="text" name="gpa[]" value="${edu.gpa || ""}">
+                <input type="text" name="gpa[]" value="${edu?.gpa || ""}">
             </div>
             <div class="form-row">
                 <label for="education-date">Date:</label>
-                <input type="text" name="education-date[]" value="${
-                  edu.date || ""
-                }">
+                <input type="text" name="education-date[]" value="${edu?.date || ""}">
             </div>
             <div class="form-row">
                 <label for="education-descriptions">Descriptions:</label>
-                <textarea name="education-descriptions[]" placeholder="Your description here...">${
-                  edu.descriptions.join("\n") || ""
-                }</textarea>
+                <textarea name="education-descriptions[]" placeholder="Your description here...">${edu?.descriptions ? edu.descriptions.join("\n") : ""}</textarea>
             </div>
-            ${
-              isFirst
-                ? ""
-                : '<button type="button" class="remove-education">Remove</button>'
-            }
+            ${isFirst ? "" : '<button type="button" class="remove-education">Remove</button>'}
         `;
     // Attach auto-updating event listeners
     entry.querySelectorAll("input, textarea").forEach((input) => {
       input.addEventListener("input", updatePreview);
     });
+    
+    // Attach remove button event listener
+    const removeButton = entry.querySelector(".remove-education");
+    if (removeButton) {
+      removeButton.addEventListener("click", function() {
+        entry.remove();
+        updatePreview();
+      });
+    }
+    
     return entry;
   }
 
@@ -284,38 +312,36 @@ document.addEventListener("DOMContentLoaded", function () {
     entry.innerHTML = `
             <div class="form-row">
                 <label for="company">Company:</label>
-                <input type="text" name="company[]" value="${
-                  exp.company || ""
-                }">
+                <input type="text" name="company[]" value="${exp?.company || ""}">
             </div>
             <div class="form-row">
                 <label for="job-title">Job Title:</label>
-                <input type="text" name="job-title[]" value="${
-                  exp.job_title || ""
-                }">
+                <input type="text" name="job-title[]" value="${exp?.job_title || ""}">
             </div>
             <div class="form-row">
                 <label for="experience-date">Date:</label>
-                <input type="text" name="experience-date[]" value="${
-                  exp.date || ""
-                }">
+                <input type="text" name="experience-date[]" value="${exp?.date || ""}">
             </div>
             <div class="form-row">
                 <label for="experience-descriptions">Descriptions:</label>
-                <textarea name="experience-descriptions[]" placeholder="Your description here...">${
-                  exp.descriptions.join("\n") || ""
-                }</textarea>
+                <textarea name="experience-descriptions[]" placeholder="Your description here...">${exp?.descriptions ? exp.descriptions.join("\n") : ""}</textarea>
             </div>
-            ${
-              isFirst
-                ? ""
-                : '<button type="button" class="remove-experience">Remove</button>'
-            }
+            ${isFirst ? "" : '<button type="button" class="remove-experience">Remove</button>'}
         `;
     // Attach auto-updating event listeners
     entry.querySelectorAll("input, textarea").forEach((input) => {
       input.addEventListener("input", updatePreview);
     });
+    
+    // Attach remove button event listener
+    const removeButton = entry.querySelector(".remove-experience");
+    if (removeButton) {
+      removeButton.addEventListener("click", function() {
+        entry.remove();
+        updatePreview();
+      });
+    }
+    
     return entry;
   }
 
@@ -323,28 +349,30 @@ document.addEventListener("DOMContentLoaded", function () {
     const entry = document.createElement("div");
     entry.classList.add("language-entry");
     entry.innerHTML = `
-              <div class="form-row">
-                  <label for="language">Language:</label>
-                  <input type="text" name="language[]" value="${
-                    lang.language || ""
-                  }">
-              </div>
-              <div class="form-row">
-                  <label for="proficiency">Proficiency:</label>
-                  <input type="text" name="proficiency[]" value="${
-                    lang.proficiency || ""
-                  }">
-              </div>
-              ${
-                isFirst
-                  ? ""
-                  : '<button type="button" class="remove-language">Remove</button>'
-              }
-          `;
+            <div class="form-row">
+                <label for="language">Language:</label>
+                <input type="text" name="language[]" value="${lang?.language || ""}">
+            </div>
+            <div class="form-row">
+                <label for="proficiency">Proficiency:</label>
+                <input type="text" name="proficiency[]" value="${lang?.proficiency || ""}">
+            </div>
+            ${isFirst ? "" : '<button type="button" class="remove-language">Remove</button>'}
+        `;
     // Attach auto-updating event listeners
     entry.querySelectorAll("input, textarea").forEach((input) => {
       input.addEventListener("input", updatePreview);
     });
+    
+    // Attach remove button event listener
+    const removeButton = entry.querySelector(".remove-language");
+    if (removeButton) {
+      removeButton.addEventListener("click", function() {
+        entry.remove();
+        updatePreview();
+      });
+    }
+    
     return entry;
   }
 
@@ -390,7 +418,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Function to get the current form data
   function getFormData() {
-    return {
+    const detectedLanguage = document.querySelector('input[name="detected-language"]')?.value || 'en';
+    
+    const formData = {
+      language: detectedLanguage,
       profile: {
         cv_id: document.getElementById("cv-id").value || currentCVId,
         name: document.getElementById("name").value || "",
@@ -437,6 +468,7 @@ document.addEventListener("DOMContentLoaded", function () {
         })
       ),
     };
+    return formData;
   }
 
   // Update local storage whenever the form data changes

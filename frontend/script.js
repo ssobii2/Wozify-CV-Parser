@@ -51,7 +51,6 @@ document.getElementById("upload-form").addEventListener("submit", async function
       if (typeof window.populateFields === 'function') {
         window.populateFields(jsonCheck.data);
         window.updatePreview(); // Update preview after populating from JSON
-        console.log('Form populated from existing JSON file');
         hideLoading(); // Hide loading spinner and enable submit button
         return; // Stop here, don't proceed with form submission
       } else {
@@ -134,7 +133,6 @@ document.getElementById("upload-form").addEventListener("submit", async function
     }
     
     const result = await response.json();
-    console.log('CV processed successfully:', result);
     
     // Populate form with the processed data and update preview
     if (result.data && typeof window.populateFields === 'function') {
@@ -282,8 +280,12 @@ document
 
 // Function to get the current form data
 function getFormData() {
-  const data = {
+  const detectedLanguage = document.querySelector('input[name="detected-language"]')?.value || 'en';
+  
+  return {
+    language: detectedLanguage,
     profile: {
+      cv_id: document.getElementById("cv-id").value || "",
       name: document.getElementById("name").value || "",
       email: document.getElementById("email").value || "",
       phone: document.getElementById("phone").value || "",
@@ -332,7 +334,6 @@ function getFormData() {
     ),
     current_position: document.getElementById("current-position").value || "",
   };
-  return data;
 }
 
 // Update local storage whenever the form data changes
@@ -353,15 +354,17 @@ async function saveFormData() {
   }
 
   try {
-    // Get form data and ensure CV ID is included
+    // Get form data and ensure CV ID and language are included
     const formData = getFormData();
     const cvId = document.getElementById("cv-id").value || currentCVId;
+    const detectedLanguage = document.querySelector('input[name="detected-language"]')?.value || 'en';
     
     // Add CV ID to profile section when saving
     if (!formData.profile) {
       formData.profile = {};
     }
     formData.profile.cv_id = cvId;
+    formData.language = detectedLanguage;
 
     const response = await fetch('/save_form', {
       method: 'POST',
