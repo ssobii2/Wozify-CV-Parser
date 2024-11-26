@@ -6,6 +6,7 @@ from .experience_extractor_hu import ExperienceExtractorHu
 from .skills_extractor import SkillsExtractor
 from .language_extractor import LanguageExtractor
 from .current_position_extractor import CurrentPositionExtractor
+from .cv_section_parser import CVSectionParser
 
 import re
 import spacy
@@ -28,6 +29,7 @@ class CVExtractor:
         self.skills_extractor = SkillsExtractor(nlp_en, nlp_hu)
         self.language_extractor = LanguageExtractor(nlp_en, nlp_hu)
         self.current_position_extractor = CurrentPositionExtractor(nlp_en, nlp_hu)
+        self.section_parser = CVSectionParser()
         
         # Define date patterns for date extraction
         self.date_patterns = [
@@ -199,18 +201,24 @@ class CVExtractor:
         """Extract detailed education information using EducationExtractor."""
         try:
             language = detect(text)
+            
+            # First use section parser to get education section
+            try:
+                parsed_sections = self.section_parser.parse_sections(text)
+            except Exception as e:
+                print(f"Section parsing failed, using direct extraction: {str(e)}")
+                parsed_sections = None
+            
             if language == 'hu':
+                # For Hungarian, we don't yet have section parser integration
                 return self.education_extractor_hu.extract_education(text)
-            return self.education_extractor.extract_education(text)
+            
+            # For English, use the education extractor with parsed sections
+            return self.education_extractor.extract_education(text, parsed_sections)
+            
         except Exception as e:
             print(f"Error extracting education: {str(e)}")
-            return [{
-                'school': '',
-                'degree': '',
-                'gpa': '',
-                'date': '',
-                'descriptions': []
-            }]
+            return []
 
     def extract_skills(self, text: str) -> List[str]:
         """Extract skills from text using SkillsExtractor."""
