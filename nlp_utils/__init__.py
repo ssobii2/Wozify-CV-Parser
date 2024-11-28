@@ -49,6 +49,25 @@ class CVExtractor:
             'languages': ['language', 'languages', 'language skills', 'nyelvtudás', 'nyelvek'],
         }
 
+        self._cached_sections = {}  # Add this line to store parsed sections
+
+    def _get_parsed_sections(self, text: str) -> Optional[Dict]:
+        """Get parsed sections with caching to avoid multiple parses."""
+        # Use text hash as cache key
+        cache_key = hash(text)
+        
+        if cache_key in self._cached_sections:
+            return self._cached_sections[cache_key]
+        
+        try:
+            parsed_sections = self.section_parser.parse_sections(text)
+            self._cached_sections[cache_key] = parsed_sections
+            return parsed_sections
+        except Exception as e:
+            print(f"Section parsing failed, using direct extraction: {str(e)}")
+            self._cached_sections[cache_key] = None
+            return None
+
     def get_nlp_model_for_text(self, text: str):
         """Determine the language of the text and return the appropriate spaCy NLP model."""
         try:
@@ -150,11 +169,13 @@ class CVExtractor:
 
     def extract_entities(self, text: str) -> Dict:
         """Main method to extract all information from CV."""
-        # Detect language first
         try:
             language = detect(text)
         except:
             language = 'en'
+        
+        # Parse sections once at the start
+        _ = self._get_parsed_sections(text)
         
         # Get appropriate NLP model
         nlp_model = self.get_nlp_model_for_text(text)
@@ -170,9 +191,12 @@ class CVExtractor:
         skills = self.extract_skills(text)
         languages = self.extract_languages(text)
         
+        # Clear the cache after processing
+        self._cached_sections.clear()
+        
         # Return extracted data with language information
         return {
-            "language": language,  
+            "language": language,
             "profile": profile_data,
             "current_position": current_position,
             "education": education,
@@ -185,9 +209,17 @@ class CVExtractor:
         """Extract detailed work experience information using ExperienceExtractor."""
         try:
             language = detect(text)
+            
             if language == 'hu':
+                # For Hungarian, we don't yet have section parser integration
                 return self.experience_extractor_hu.extract_work_experience(text)
-            return self.experience_extractor.extract_work_experience(text)
+            
+            # Get parsed sections from cache or parse new
+            parsed_sections = self._get_parsed_sections(text)
+            
+            # For English, use the experience extractor with parsed sections
+            return self.experience_extractor.extract_work_experience(text, parsed_sections)
+            
         except Exception as e:
             print(f"Error extracting work experience: {str(e)}")
             return []
@@ -202,16 +234,12 @@ class CVExtractor:
         try:
             language = detect(text)
             
-            # First use section parser to get education section
-            try:
-                parsed_sections = self.section_parser.parse_sections(text)
-            except Exception as e:
-                print(f"Section parsing failed, using direct extraction: {str(e)}")
-                parsed_sections = None
-            
             if language == 'hu':
                 # For Hungarian, we don't yet have section parser integration
                 return self.education_extractor_hu.extract_education(text)
+            
+            # Get parsed sections from cache or parse new
+            parsed_sections = self._get_parsed_sections(text)
             
             # For English, use the education extractor with parsed sections
             return self.education_extractor.extract_education(text, parsed_sections)

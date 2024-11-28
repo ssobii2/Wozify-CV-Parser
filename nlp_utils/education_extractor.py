@@ -8,11 +8,19 @@ class EducationExtractor:
         # Constants for English
         self.SCHOOLS = [
             'College', 'University', 'Institute', 'School', 'Academy', 'BASIS', 'Magnet',
+            'Polytechnic', 'Seminary', 'Conservatory'
         ]
         
         self.DEGREES = [
             'Associate', 'Bachelor', 'Master', 'PhD', 'Ph.D', 'BSc', 'BA', 'MS', 'MSc', 'MBA',
-            'Diploma', 'Engineer', 'Technician',
+            'Diploma', 'Engineer', 'Technician', 'BEng', 'MEng', 'BBA', 'DBA', 'MD', 'JD',
+            'LLB', 'LLM', 'EdD', 'DPhil', 'MPhil', 'MAcc', 'MFA', 'BFA'
+        ]
+        
+        self.HONORS = [
+            'summa cum laude', 'magna cum laude', 'cum laude', 'with honors', 'with distinction',
+            'first class', 'second class', 'merit', 'distinction', 'dean\'s list', 'highest honors',
+            'high honors', 'honors'
         ]
         
         self.section_headers = {
@@ -133,21 +141,34 @@ class EducationExtractor:
             if ent.label_ == "CARDINAL" and re.match(r'^[0-5]\.\d{1,2}$', ent.text):
                 return ent.text
         
-        # Fallback to regex for GPA and grades
-        gpa_match = re.search(r'GPA:?\s*([\d\.]+)', text, re.IGNORECASE)
-        grade_match = re.search(r'(?:Note):\s*([\w]+)', text, re.IGNORECASE)
+        # Enhanced GPA patterns
+        gpa_patterns = [
+            r'GPA:?\s*([\d\.]+)(?:/[\d\.]+)?',  # Standard GPA format
+            r'(?:Note|Grade):\s*([\w\.]+)',      # Text-based grades
+            r'([\d\.]+)\s*/\s*[\d\.]+',          # Fractional format
+            r'([\d,]+)/20',                      # French system
+            r'([\d,]+)/10',                      # Indian/European system
+            r'Grade:\s*(A\+?|B\+?|C\+?|D\+?|F)',  # Letter grades
+        ]
         
-        if gpa_match:
-            return gpa_match.group(1)
-        elif grade_match:
-            grade = grade_match.group(1)
-            # Convert grades to numeric values
-            grade_map = {
-                'excellent': '5.0',
-                'good': '4.0',
-                'satisfactory': '3.0',
-            }
-            return grade_map.get(grade.lower(), grade)
+        for pattern in gpa_patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                grade = match.group(1)
+                # Convert comma to dot for decimal numbers
+                grade = grade.replace(',', '.')
+                
+                # Convert letter grades to numeric values
+                grade_map = {
+                    'A+': '4.0', 'A': '4.0', 'A-': '3.7',
+                    'B+': '3.3', 'B': '3.0', 'B-': '2.7',
+                    'C+': '2.3', 'C': '2.0', 'C-': '1.7',
+                    'D+': '1.3', 'D': '1.0', 'F': '0.0',
+                    'excellent': '5.0', 'very good': '4.0',
+                    'good': '3.0', 'satisfactory': '2.0',
+                    'pass': '1.0'
+                }
+                return grade_map.get(grade.lower(), grade)
         
         return None
     
@@ -167,7 +188,25 @@ class EducationExtractor:
         return None
 
     def extract_date_range(self, text: str) -> Optional[str]:
+        """Enhanced date range extraction with support for ongoing education."""
         doc = self.nlp(text)
+        
+        # Check for ongoing education indicators
+        ongoing_patterns = [
+            r'(?:current|ongoing|present|now)',
+            r'\b(?:studying|enrolled|pursuing)\b',
+            r'(?:expected|anticipated|planned)\s+(?:graduation|completion).*?(\d{4})',
+        ]
+        
+        for pattern in ongoing_patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                # If there's a future year mentioned, use it
+                if match.groups():
+                    return f"{self.extract_date(text)} to {match.group(1)}"
+                return f"{self.extract_date(text)} to Present"
+
+        # Fall back to standard date range extraction
         date_entities = [ent.text for ent in doc.ents if ent.label_ == 'DATE']
         if date_entities:
             return ' to '.join(date_entities)
@@ -412,6 +451,8 @@ class EducationExtractor:
                         'degree': degree_info,
                         'gpa': gpa or self.extract_gpa(line) or '',
                         'date': self.extract_date(line) or '',
+                        'date_range': self.extract_date_range(line) or '',
+                        'honors': self.extract_honors(line),
                         'descriptions': []
                     }
                     continue
@@ -422,6 +463,8 @@ class EducationExtractor:
                         'degree': '',
                         'gpa': '',
                         'date': '',
+                        'date_range': '',
+                        'honors': [],
                         'descriptions': []
                     }
                 
@@ -483,3 +526,28 @@ class EducationExtractor:
         
         print(f"Final education entries: {len(cleaned_data)}")
         return cleaned_data if cleaned_data else []
+
+    def extract_honors(self, text: str) -> List[str]:
+        """Extract academic honors and awards."""
+        honors = []
+        
+        # Check for standard honors
+        for honor in self.HONORS:
+            if re.search(r'\b' + re.escape(honor) + r'\b', text, re.IGNORECASE):
+                honors.append(honor.title())
+        
+        # Look for other award patterns
+        award_patterns = [
+            r'(?:received|awarded|earned|granted)\s+(?:the\s+)?([^,.]+?(?:award|prize|medal|scholarship))',
+            r'(?:award|prize|medal|scholarship):\s*([^,.]+)',
+            r'(?:first|second|third)\s+(?:place|prize|rank)',
+        ]
+        
+        for pattern in award_patterns:
+            matches = re.finditer(pattern, text, re.IGNORECASE)
+            for match in matches:
+                honor = match.group(1).strip() if match.groups() else match.group(0).strip()
+                if honor and honor not in honors:
+                    honors.append(honor.title())
+        
+        return honors
