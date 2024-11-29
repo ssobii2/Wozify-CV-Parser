@@ -9,13 +9,28 @@ class CurrentPositionExtractor:
         self.nlp_en = nlp_en
         self.nlp_hu = nlp_hu
         self.job_indicators = [
+            # English job indicators
             'developer', 'engineer', 'manager', 'consultant', 'analyst', 
             'specialist', 'coordinator', 'assistant', 'director', 'lead',
-            'intern', 'trainee', 'administrator', 'supervisor', 'senior', 'junior'
+            'intern', 'trainee', 'administrator', 'supervisor', 'senior', 'junior',
+            'architect', 'designer', 'programmer', 'technician', 'officer',
+            'executive', 'founder', 'head', 'chief', 'president', 'principal',
+            'full-stack', 'frontend', 'backend', 'software', 'web', 'mobile',
+            'data', 'system', 'network', 'cloud', 'devops', 'qa', 'test',
             # Hungarian job indicators
             'fejlesztő', 'mérnök', 'vezető', 'tanácsadó', 'elemző',
-            'szakértő', 'koordinátor', 'asszisztens', 'igazgató', 'vezető',
-            'gyakornok', 'tanuló', 'adminisztrátor', 'felügyelő', 'szenior', 'junior'
+            'szakértő', 'koordinátor', 'asszisztens', 'igazgató',
+            'gyakornok', 'tanuló', 'adminisztrátor', 'felügyelő', 'szenior', 'junior',
+            'architekt', 'tervező', 'programozó', 'technikus', 'tisztviselő',
+            'ügyvezető', 'alapító', 'vezérigazgató', 'elnök'
+        ]
+        
+        # Current position indicators
+        self.current_indicators = [
+            # English
+            'present', 'current', 'now', 'ongoing', 'to date',
+            # Hungarian
+            'jelenlegi', 'jelenleg', 'mostani', 'folyamatban'
         ]
 
     def get_nlp_model_for_text(self, text: str):
@@ -30,8 +45,7 @@ class CurrentPositionExtractor:
         """Parse date string into a comparable tuple of (year, month)."""
         try:
             # Handle current position indicators
-            current_indicators = ['Present', 'Current', 'Now', 'Jelenleg', 'Jelenlegi']
-            if any(indicator in date_str for indicator in current_indicators):
+            if any(indicator.lower() in date_str.lower() for indicator in self.current_indicators):
                 return (float('inf'), float('inf'))  # Will always be latest
             
             # Extract year
@@ -40,25 +54,30 @@ class CurrentPositionExtractor:
             
             # Extract month
             month_map = {
+                # English months
                 'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
                 'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12,
                 # Hungarian months
+                'január': 1, 'február': 2, 'március': 3, 'április': 4, 'május': 5, 'június': 6,
+                'július': 7, 'augusztus': 8, 'szeptember': 9, 'október': 10, 'november': 11, 'december': 12,
+                # Short Hungarian months
                 'jan': 1, 'feb': 2, 'már': 3, 'ápr': 4, 'máj': 5, 'jún': 6,
-                'júl': 7, 'aug': 8, 'szep': 9, 'okt': 10, 'nov': 11, 'dec': 12
+                'júl': 7, 'aug': 8, 'szept': 9, 'okt': 10, 'nov': 11, 'dec': 12
             }
             
             month = 0
             for month_str, month_num in month_map.items():
-                if month_str in date_str.lower():
+                if month_str.lower() in date_str.lower():
                     month = month_num
                     break
             
             return (year, month)
-        except Exception:
+        except Exception as e:
+            logging.warning(f"Date parsing failed: {str(e)}")
             return (0, 0)  # Return lowest priority for unparseable dates
 
     def extract_current_position(self, text: str, work_experience: List[Dict]) -> Optional[str]:
-        """Extract the most recent job title from experience section using pattern matching and fallback logic."""
+        """Extract the most recent job title from experience section."""
         if not text or not work_experience:
             return None
 
@@ -66,21 +85,42 @@ class CurrentPositionExtractor:
             # Sort experiences by date, with current positions first
             def get_date_score(job):
                 date = job.get('date', '')
-                year, month = self._parse_date(date)
-                # Return tuple for sorting: (year, month, original_date)
-                # original_date is included to maintain stable sorting for same dates
+                date_range = job.get('date_range', '')  # Also check date_range field
+                
+                # First check if this is a current position
+                if any(indicator.lower() in (date + date_range).lower() for indicator in self.current_indicators):
+                    return (float('inf'), float('inf'), date)
+                
+                # Then try to parse the date
+                year, month = self._parse_date(date if date else date_range)
                 return (year, month, date)
             
             # Sort work experiences by date, most recent first
-            sorted_experiences = sorted(work_experience, key=get_date_score, reverse=True)
+            sorted_experiences = sorted(
+                [exp for exp in work_experience if exp.get('job_title') or exp.get('company')],
+                key=get_date_score,
+                reverse=True
+            )
             
-            # Take the most recent position (should be first after sorting)
+            # Take the most recent position
             if sorted_experiences:
-                return sorted_experiences[0].get('job_title')
+                most_recent = sorted_experiences[0]
+                
+                # Prefer job_title if available, otherwise try to extract from company
+                if most_recent.get('job_title'):
+                    return most_recent['job_title']
+                elif most_recent.get('company'):
+                    # Try to extract job title from company description
+                    for indicator in self.job_indicators:
+                        if indicator.lower() in most_recent['company'].lower():
+                            return most_recent['company']
             
             return None
 
         except Exception as e:
-            logging.warning(f"Warning: Current position extraction failed: {str(e)}")
+            logging.warning(f"Current position extraction failed: {str(e)}")
             # Emergency fallback: Return the first job title from original list
-            return work_experience[0].get('job_title') if work_experience else None
+            for exp in work_experience:
+                if exp.get('job_title'):
+                    return exp['job_title']
+            return None

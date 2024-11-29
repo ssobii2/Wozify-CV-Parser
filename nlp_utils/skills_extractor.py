@@ -1,5 +1,5 @@
 import re
-from typing import List
+from typing import List, Optional, Dict
 import spacy
 from langdetect import detect, LangDetectException
 
@@ -8,10 +8,16 @@ class SkillsExtractor:
         self.nlp_en = nlp_en
         self.nlp_hu = nlp_hu
         self.section_headers = {
-            'skills': ['skills', 'technical skills', 'competencies', 'expertise', 'technologies']
+            'skills': [
+                'skills', 'technical skills', 'competencies', 'expertise', 'technologies',
+                'készségek', 'technikai készségek', 'szakmai készségek', 'kompetenciák',
+                'szaktudás', 'technológiák', 'technikai ismeretek', 'szakmai ismeretek',
+                'programozási ismeretek', 'fejlesztői ismeretek', 'egyéb tanusítványok', 'egyéb',
+                'programozói skillek', 'szakértelem'
+            ]
         }
         
-        # List of skills to extract
+        # List of skills to extract (keeping in English since technical terms are usually in English)
         self.skills = [
             'python', 'java', 'javascript', 'c++', 'c#', 'ruby', 'php', 'swift',
             'kotlin', 'go', 'rust', 'typescript', 'scala', 'perl', 'r',
@@ -22,7 +28,9 @@ class SkillsExtractor:
             'aws', 'azure', 'gcp', 'docker', 'kubernetes', 'jenkins', 'terraform',
             'ansible', 'circleci', 'gitlab',
             'git', 'jira', 'confluence', 'slack', 'vscode', 'intellij', 'eclipse',
-            'postman', 'webpack', 'npm', 'yarn'
+            'postman', 'webpack', 'npm', 'yarn', 'html5', '.net', 'ios', 'android',
+            'google', 'ui/ux', 'adobe', 'figma', 'prisma', 'web3', 'express', 'linux',
+            'macos', 'windows', 'laravel'
         ]
 
     def get_nlp_model_for_text(self, text: str):
@@ -70,33 +78,104 @@ class SkillsExtractor:
         
         return section_lines
 
-    def extract_skills(self, text: str) -> List[str]:
-        """Extract skills from text using NLP and fallback to static list."""
+    def extract_skills(self, text: str, parsed_sections: Optional[Dict] = None) -> List[str]:
+        """Extract skills from text using both predefined lists and NLP analysis."""
         skills = set()
         
-        # Use NLP to extract skills
-        nlp = self.get_nlp_model_for_text(text)
-        doc = nlp(text)
+        # Try to use parsed sections first if available
+        if parsed_sections and parsed_sections.get('skills'):
+            skills_text = ' '.join(parsed_sections['skills'])
+            if skills_text.strip():
+                # First get skills from predefined list
+                for skill in self.skills:
+                    # Create variations of the skill name to match common formats
+                    skill_variations = [
+                        skill,  # normal: react
+                        skill + 'js',  # reactjs
+                        skill + '.js',  # react.js
+                        skill.replace('javascript', 'js'),  # javascript -> js
+                        skill.replace('typescript', 'ts'),  # typescript -> ts
+                        skill.capitalize(),  # React
+                        skill.upper(),  # REACT
+                    ]
+                    
+                    for variation in skill_variations:
+                        if re.search(r'\b' + re.escape(variation) + r'\b', skills_text, re.IGNORECASE):
+                            skills.add(skill.capitalize())
+                            break
+                
+                # Then use NLP to find additional technical skills
+                nlp = self.get_nlp_model_for_text(skills_text)
+                doc = nlp(skills_text)
+                
+                # Look for noun phrases that might be technical skills
+                for chunk in doc.noun_chunks:
+                    # Clean and normalize the potential skill
+                    potential_skill = chunk.text.strip()
+                    
+                    # Skip if too long or too short
+                    if len(potential_skill.split()) > 3 or len(potential_skill) < 2:
+                        continue
+                    
+                    # Skip common non-skill words
+                    if potential_skill.lower() in {'skills', 'experience', 'years', 'knowledge', 'proficiency', 'expert'}:
+                        continue
+                    
+                    # Look for technical skill patterns
+                    if self._is_likely_technical_skill(potential_skill):
+                        skills.add(potential_skill.capitalize())
+                
+                # If we found skills in the parsed section, return them
+                if skills:
+                    return sorted(skills)
         
-        # Use spaCy's NER to find skill entities
-        for ent in doc.ents:
-            if ent.label_ == 'SKILL':
-                skills.add(ent.text.capitalize())
-        
-        # Fallback to static list if no skills found
+        # Only fallback if no skills found in parsed sections
         if not skills:
-            skills_section = self.extract_section(text, self.section_headers['skills'])
-            for skill in self.skills:
-                # Check for both the skill name and common abbreviations
-                if re.search(r'\b' + skill + r'\b', text, re.IGNORECASE):
-                    skills.add(skill.capitalize())
-                # Add checks for common abbreviations
-                if skill in self.abbreviations:
-                    abbreviation = self.abbreviations[skill]
-                    if re.search(r'\b' + abbreviation + r'\b', text, re.IGNORECASE):
+            section_lines = self.extract_section(text, self.section_headers['skills'])
+            if section_lines:
+                section_text = ' '.join(section_lines)
+                for skill in self.skills:
+                    if re.search(r'\b' + re.escape(skill) + r'\b', section_text, re.IGNORECASE):
                         skills.add(skill.capitalize())
         
         return sorted(skills)
+
+    def _is_likely_technical_skill(self, text: str) -> bool:
+        """Check if the text is likely to be a technical skill."""
+        # Technical indicators
+        tech_patterns = [
+            r'\b[A-Z]+\b',  # Uppercase words like SQL, CSS
+            r'\b[A-Za-z]+[\+\#]+\b',  # C++, C#
+            r'\b[A-Za-z]+\.?js\b',  # .js suffix
+            r'\b[A-Za-z]+\d+\b',  # Version numbers
+            r'[A-Z][a-z]+[A-Z][a-z]+',  # CamelCase
+            r'\b[A-Za-z]+[-\.][A-Za-z]+\b',  # Hyphenated or dotted
+        ]
+        
+        # Skip common English words and general terms
+        common_words = {
+            'the', 'and', 'or', 'in', 'at', 'by', 'for', 'with', 'about',
+            'skills', 'years', 'experience', 'knowledge', 'advanced', 'intermediate',
+            'basic', 'expert', 'proficient', 'familiar', 'understanding'
+        }
+        
+        text_lower = text.lower()
+        
+        # Skip if it's a common word
+        if text_lower in common_words:
+            return False
+        
+        # Check for technical patterns
+        if any(re.search(pattern, text) for pattern in tech_patterns):
+            return True
+        
+        # Check for technical context
+        technical_context = {
+            'framework', 'library', 'language', 'database', 'platform',
+            'tool', 'sdk', 'api', 'stack', 'protocol', 'service'
+        }
+        
+        return any(context in text_lower for context in technical_context)
 
     # Add a dictionary for common skill abbreviations
     @property
@@ -108,6 +187,7 @@ class SkillsExtractor:
             'JavaScript': 'JS',
             'Python': 'Py',
             'HTML': 'HTML',
+            'HTML5': 'HTML5',
             'CSS': 'CSS',
             'PHP': 'PHP',
             'C#': 'C#',
@@ -145,4 +225,19 @@ class SkillsExtractor:
             'Elasticsearch': 'Elasticsearch',
             'Cassandra': 'Cassandra',
             'DynamoDB': 'DynamoDB',
+            'IOS': 'iOS',
+            'iOS': 'iOS',
+            'Android': 'Android',
+            'Google': 'Google',
+            'Adobe': 'Adobe',
+            'Figma': 'Figma',
+            'UI/UX': 'UI/UX',
+            'Prisma': 'Prisma',
+            'Linux': 'Linux',
+            'Windows': 'Windows',
+            'MacOS': 'Mac OS',
+            'Mac OS': 'Mac OS',
+            'Laravel': 'Laravel',
+            'Web3': 'Web3',
+            'Web 3': 'Web3',
         }

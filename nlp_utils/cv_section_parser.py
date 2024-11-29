@@ -347,7 +347,16 @@ class CVSectionParser:
                     if current_section and buffer:
                         content = self._clean_content('\n'.join(buffer))
                         if content:
-                            sections[current_section].append(content)
+                            # Check for language content within other sections
+                            if self._contains_language_info(content):
+                                language_content, remaining_content = self._extract_language_content(content)
+                                if language_content:
+                                    sections['languages'].append(language_content)
+                                    found_sections.add('languages')
+                                if remaining_content and current_section != 'languages':
+                                    sections[current_section].append(remaining_content)
+                            else:
+                                sections[current_section].append(content)
                         buffer = []
                     
                     current_section = section
@@ -366,25 +375,32 @@ class CVSectionParser:
             if not line and buffer and len(buffer) > 1:
                 content = self._clean_content('\n'.join(buffer))
                 if content:
-                    sections[current_section].append(content)
+                    # Check for language content
+                    if self._contains_language_info(content):
+                        language_content, remaining_content = self._extract_language_content(content)
+                        if language_content:
+                            sections['languages'].append(language_content)
+                            found_sections.add('languages')
+                        if remaining_content and current_section != 'languages':
+                            sections[current_section].append(remaining_content)
+                    else:
+                        sections[current_section].append(content)
                 buffer = []
         
         # Don't forget the last section
         if current_section and buffer:
             content = self._clean_content('\n'.join(buffer))
             if content:
-                sections[current_section].append(content)
-        
-        # Clean and validate language content, move work experience content
-        if current_section == "languages":
-            language_content, work_exp_content = self._clean_language_content(content)
-            if language_content:
-                sections["languages"].append(language_content)
-            if work_exp_content:
-                sections["experience"].append(work_exp_content)
-                found_sections.add("experience")
-        else:
-            sections[current_section].append(content)
+                # Check for language content in the last section
+                if self._contains_language_info(content):
+                    language_content, remaining_content = self._extract_language_content(content)
+                    if language_content:
+                        sections['languages'].append(language_content)
+                        found_sections.add('languages')
+                    if remaining_content and current_section != 'languages':
+                        sections[current_section].append(remaining_content)
+                else:
+                    sections[current_section].append(content)
         
         # Remove duplicates while preserving order
         for section in sections:
@@ -392,19 +408,62 @@ class CVSectionParser:
                 seen = set()
                 sections[section] = [x for x in sections[section] if not (x in seen or seen.add(x))]
         
-        # Ensure required sections are present and add optional sections with content
-        required_sections = {
-            "profile": sections.get("profile", []),
-            "education": sections.get("education", []),
-            "experience": sections.get("experience", []),
-            "languages": sections.get("languages", []),
-            "skills": sections.get("skills", [])
-        }
+        logger.info(f"Finished parsing CV into {len(sections)} sections")
+        return sections
+
+    def _contains_language_info(self, text: str) -> bool:
+        """Check if text contains language-related information."""
+        # Language indicators
+        language_patterns = [
+            r'\b(?:language|nyelv)[s]?\b',  # Language headers
+            r'\b(?:english|hungarian|german|french|spanish)\b',  # Common languages
+            r'\b(?:angol|magyar|német|francia|spanyol)\b',  # Hungarian language names
+            r'\b(?:native|fluent|advanced|intermediate|basic)\b',  # Proficiency levels
+            r'\b(?:anyanyelv|folyékony|haladó|középszint|alapszint)\b',  # Hungarian proficiency
+            r'\b[ABC][12]\b'  # CEFR levels
+        ]
         
-        # Add optional sections that have content
-        for section, content in sections.items():
-            if section not in required_sections and content:
-                required_sections[section] = content
+        text_lower = text.lower()
+        return any(re.search(pattern, text_lower) for pattern in language_patterns)
+
+    def _extract_language_content(self, text: str) -> tuple[str, str]:
+        """Extract language-related content from text.
+        Returns: (language_content, remaining_content)"""
+        lines = text.split('\n')
+        language_lines = []
+        other_lines = []
         
-        logger.info(f"Finished parsing CV into {len(required_sections)} sections")
-        return required_sections
+        for line in lines:
+            if self._is_language_line(line):
+                language_lines.append(line)
+            else:
+                other_lines.append(line)
+        
+        return (
+            '\n'.join(language_lines) if language_lines else "",
+            '\n'.join(other_lines) if other_lines else ""
+        )
+
+    def _is_language_line(self, text: str) -> bool:
+        """Check if a line contains language information."""
+        # Common language patterns
+        language_patterns = [
+            r'\b(?:english|hungarian|german|french|spanish|italian|russian|chinese|japanese)\b',
+            r'\b(?:angol|magyar|német|francia|spanyol|olasz|orosz|kínai|japán)\b',
+            r'\b(?:native|fluent|advanced|intermediate|basic|beginner)\b',
+            r'\b(?:anyanyelv|folyékony|haladó|középszint|alapszint|kezdő)\b',
+            r'\b[ABC][12]\b',
+            r'(?:language|nyelv)[s]?\s*:',
+            r'\b(?:mother tongue|business level|working knowledge)\b',
+            r'\b(?:anyanyelvi szint|üzleti szint|munkavégzés szintje)\b'
+        ]
+        
+        text_lower = text.lower()
+        
+        # Check for language patterns
+        has_language = any(re.search(pattern, text_lower) for pattern in language_patterns)
+        
+        # Check for typical language line structure (Language - Level)
+        has_structure = bool(re.search(r'\w+\s*[-–:]\s*\w+', text))
+        
+        return has_language or has_structure

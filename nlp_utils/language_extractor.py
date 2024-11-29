@@ -1,5 +1,5 @@
 import re
-from typing import Dict, List
+from typing import Dict, List, Optional
 import spacy
 from langdetect import detect, LangDetectException
 
@@ -98,64 +98,94 @@ class LanguageExtractor:
 
         return content
 
-    def extract_languages(self, text: str) -> List[Dict[str, str]]:
-        """Extract languages and their proficiency levels using NLP and fallback logic."""
+    def extract_languages(self, text: str, parsed_sections: Optional[Dict] = None) -> List[Dict[str, str]]:
+        """Extract languages and their proficiency levels using parsed sections."""
         languages = []
         found_languages = set()
         
-        # Use NLP to extract languages
-        nlp = self.get_nlp_model_for_text(text)
-        doc = nlp(text)
+        # Try to use parsed sections first if available
+        if parsed_sections and parsed_sections.get('languages'):
+            languages_text = ' '.join(parsed_sections['languages'])
+            if languages_text.strip():
+                # First try to find structured language-proficiency pairs
+                matches = re.findall(r'(\b[A-Za-z]+\b)\s*[-–:]\s*(\b[A-Za-z\s]+)', languages_text)
+                for match in matches:
+                    language, proficiency = match
+                    language = language.lower()
+                    proficiency = proficiency.lower()
+                    
+                    # Check both English and Hungarian names
+                    is_valid_language = (
+                        language in self.predefined_languages or 
+                        any(language == hun_name.lower() for hun_name in self.known_languages.values())
+                    )
+                    
+                    if is_valid_language and any(level in proficiency for level in self.proficiency_levels):
+                        # Convert Hungarian language name to English if needed
+                        for eng_name, hun_name in self.known_languages.items():
+                            if language == hun_name.lower():
+                                language = eng_name
+                                break
+                            
+                        if language not in found_languages:
+                            languages.append({
+                                'language': language.title(),
+                                'proficiency': proficiency.lower()
+                            })
+                            found_languages.add(language)
+                
+                # Then look for language mentions with nearby proficiency levels
+                for language, hungarian_name in self.known_languages.items():
+                    if language not in found_languages and (
+                        language in languages_text.lower() or 
+                        hungarian_name.lower() in languages_text.lower()
+                    ):
+                        # Find the closest proficiency level
+                        proficiency = self._find_closest_proficiency(languages_text, language, hungarian_name)
+                        if proficiency:
+                            languages.append({
+                                'language': language.title(),
+                                'proficiency': proficiency.lower()
+                            })
+                            found_languages.add(language)
+                
+                # If we found languages in the parsed section, return them
+                if languages:
+                    return languages
         
-        # Use spaCy's NER to find language entities
-        for ent in doc.ents:
-            if ent.label_ == 'LANGUAGE':
-                language = ent.text.lower()
-                # Check against predefined list of languages
-                if language in self.predefined_languages:
-                    proficiency = self.extract_proficiency_from_context(doc, language)
-                    if language not in found_languages:
+        # Only fallback to processing entire text if no languages found in parsed sections
+        if not languages:
+            section_lines = self.extract_section(text, self.section_headers['languages'])
+            if section_lines:
+                section_text = ' '.join(section_lines)
+                # Reuse the same logic as above for the fallback
+                matches = re.findall(r'(\b[A-Za-z]+\b)\s*[-–:]\s*(\b[A-Za-z\s]+)', section_text)
+                for match in matches:
+                    language, proficiency = match
+                    language = language.lower()
+                    if language in self.predefined_languages and language not in found_languages:
                         languages.append({
                             'language': language.title(),
-                            'proficiency': proficiency
+                            'proficiency': proficiency.lower()
                         })
                         found_languages.add(language)
+        
+        return languages if languages else [{'language': '', 'proficiency': ''}]
 
-        # Always run the fallback logic to catch any missed languages
-        languages_section = self.extract_section(text, self.section_headers['languages'])
-        for line in languages_section:
-            matches = re.findall(r'(\b[A-Za-z]+\b)\s*[-–:]\s*(\b[A-Za-z\s]+)', line)
-            for match in matches:
-                language, proficiency = match
-                language = language.lower()
-                proficiency = proficiency.lower()
-                
-                # Check against predefined list of languages
-                if language in self.predefined_languages and \
-                   any(level in proficiency for level in self.proficiency_levels) and \
-                   language not in found_languages:
-                    languages.append({
-                        'language': language.title(),
-                        'proficiency': proficiency.lower()
-                    })
-                    found_languages.add(language)
-            
-            for language, hungarian_name in self.known_languages.items():
-                if (language in line.lower() or hungarian_name in line.lower()) and language not in found_languages:
-                    for level in self.proficiency_levels:
-                        if level in line.lower():
-                            lang_dict = {
-                                'language': language.title(),
-                                'proficiency': level.lower()
-                            }
-                            if lang_dict not in languages:
-                                languages.append(lang_dict)
-                                found_languages.add(language)
-
-        return languages if languages else [{
-            'language': '',
-            'proficiency': ''
-        }]
+    def _find_closest_proficiency(self, text: str, language: str, hungarian_name: str) -> str:
+        """Find the closest proficiency level to a language mention."""
+        # Split text into sentences
+        sentences = text.split('.')
+        
+        # Find sentences containing the language
+        for sentence in sentences:
+            if language in sentence.lower() or hungarian_name.lower() in sentence.lower():
+                # Look for proficiency levels in the same sentence
+                for level in self.proficiency_levels:
+                    if level in sentence.lower():
+                        return level
+        
+        return ''
     
     @property
     def predefined_languages(self):

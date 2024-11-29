@@ -47,6 +47,7 @@ def test_cv_section_parser():
     """Generate section outputs for CVs using the parser."""
     # List of test CV files
     cv_files = [
+        "Richard-3.pdf",
         "RAW-Senior-Fullstack-Developer-Gabor.docx",
         "Greenformatics_Neufeld-Balazs - CV_eng.docx",
         "Edvard_Eros_CV.pdf",

@@ -250,11 +250,29 @@ class CVExtractor:
 
     def extract_skills(self, text: str) -> List[str]:
         """Extract skills from text using SkillsExtractor."""
-        return self.skills_extractor.extract_skills(text)
+        try:
+            # Get parsed sections from cache or parse new
+            parsed_sections = self._get_parsed_sections(text)
+            
+            # Pass parsed sections to skills extractor
+            return self.skills_extractor.extract_skills(text, parsed_sections)
+            
+        except Exception as e:
+            print(f"Error extracting skills: {str(e)}")
+            return []
 
     def extract_languages(self, text: str) -> List[Dict[str, str]]:
         """Extract languages and their proficiency levels using LanguageExtractor."""
-        return self.language_extractor.extract_languages(text)
+        try:
+            # Get parsed sections from cache or parse new
+            parsed_sections = self._get_parsed_sections(text)
+            
+            # Pass parsed sections to language extractor
+            return self.language_extractor.extract_languages(text, parsed_sections)
+            
+        except Exception as e:
+            print(f"Error extracting languages: {str(e)}")
+            return [{'language': '', 'proficiency': ''}]
 
 __all__ = [
     'ProfileExtractor', 'EducationExtractor', 'EducationExtractorHu', 'ExperienceExtractor', 'ExperienceExtractorHu',

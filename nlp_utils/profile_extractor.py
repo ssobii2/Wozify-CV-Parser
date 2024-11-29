@@ -63,7 +63,7 @@ class ProfileExtractor:
         return profile_data
 
     def extract_name(self, text: str) -> str:
-        """Extract name using NER."""
+        """Extract name using NER and additional validation."""
         try:
             nlp = self.get_nlp_model_for_text(text)
             doc = nlp(text)
@@ -71,7 +71,10 @@ class ProfileExtractor:
             # First try NER
             for ent in doc.ents:
                 if ent.label_ == 'PERSON':
-                    return ent.text
+                    # Validate the name - check it's not a metadata artifact
+                    name = ent.text.strip()
+                    if self._is_valid_name(name):
+                        return name
             
             # Fallback: Try to find name at the start of the document
             lines = text.strip().split('\n')
@@ -81,12 +84,53 @@ class ProfileExtractor:
                     # Check if it looks like a name (capitalized words)
                     words = line.split()
                     if all(word[0].isupper() for word in words if word):
-                        return line
+                        if self._is_valid_name(line):
+                            return line
             
             return ""
         except Exception as e:
             print(f"Warning: Error extracting name: {str(e)}")
             return ""
+
+    def _is_valid_name(self, name: str) -> bool:
+        """Validate if the extracted text is likely a real name."""
+        # Skip if empty or too short
+        if not name or len(name) < 2:
+            return False
+        
+        # Skip common metadata patterns
+        invalid_patterns = [
+            r'^cid:',           # Common metadata prefix
+            r'^\d+$',          # Just numbers
+            r'^[a-f0-9]+$',    # Hexadecimal
+            r'^#',             # Starts with hash
+            r'^id:',           # ID prefix
+            r'^\[.*\]$',       # Square brackets
+            r'^<.*>$',         # Angle brackets
+            r'^\{.*\}$',       # Curly braces
+            r'^\d+[A-Za-z]+$'  # Number followed by letters
+        ]
+        
+        for pattern in invalid_patterns:
+            if re.match(pattern, name, re.IGNORECASE):
+                return False
+        
+        # Check for valid name characters
+        valid_name_pattern = r'^[A-Za-z\u00C0-\u017F\s\'-]+$'  # Letters, spaces, hyphens, apostrophes, and accented characters
+        if not re.match(valid_name_pattern, name):
+            return False
+        
+        # Additional validation for minimum word structure
+        words = name.split()
+        if len(words) < 1 or len(words) > 4:  # Names typically have 1-4 words
+            return False
+        
+        # Check each word is properly capitalized and long enough
+        for word in words:
+            if len(word) < 2 or not word[0].isupper():
+                return False
+        
+        return True
 
     def extract_location(self, text: str) -> str:
         """Extract location using NER."""
