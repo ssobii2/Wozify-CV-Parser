@@ -109,7 +109,13 @@ class SkillsExtractor:
                 doc = nlp(skills_text)
                 
                 # Look for noun phrases that might be technical skills
-                for chunk in doc.noun_chunks:
+                if nlp.meta['lang'] == 'hu':
+                    # Custom extraction for Hungarian
+                    noun_phrases = self.extract_noun_phrases(doc)
+                else:
+                    noun_phrases = doc.noun_chunks
+
+                for chunk in noun_phrases:
                     # Clean and normalize the potential skill
                     potential_skill = chunk.text.strip()
                     
@@ -139,6 +145,14 @@ class SkillsExtractor:
                         skills.add(skill.capitalize())
         
         return sorted(skills)
+
+    def extract_noun_phrases(self, doc):
+        """Custom method to extract noun phrases for Hungarian language."""
+        noun_phrases = []
+        for token in doc:
+            if token.dep_ in {'nsubj', 'dobj', 'pobj'}:
+                noun_phrases.append(token.subtree)
+        return noun_phrases
 
     def _is_likely_technical_skill(self, text: str) -> bool:
         """Check if the text is likely to be a technical skill."""

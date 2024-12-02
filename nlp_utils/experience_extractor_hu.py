@@ -99,6 +99,15 @@ class ExperienceExtractorHu:
 
         return None
 
+    def extract_noun_phrases(self, doc):
+        """Extract noun phrases using dependency parsing."""
+        noun_phrases = []
+        for token in doc:
+            if token.dep_ == 'nsubj' or token.dep_ == 'dobj':
+                noun_phrase = ' '.join([child.text for child in token.subtree])
+                noun_phrases.append(noun_phrase)
+        return noun_phrases
+
     def is_likely_company(self, text: str) -> bool:
         """Check if text is likely a company name."""
         if not text:
@@ -132,8 +141,8 @@ class ExperienceExtractorHu:
                         if ent.label_ in {'ORG', 'GPE', 'PRODUCT'}:
                             return True
                             
-                    # Additional checks based on token attributes
-                    noun_phrases = list(doc.noun_chunks)
+                    # Use custom noun phrase extraction
+                    noun_phrases = self.extract_noun_phrases(doc)
                     if len(noun_phrases) == 1 and len(doc) <= 5:
                         # Single noun phrase with reasonable length could be a company
                         return True
@@ -205,8 +214,67 @@ class ExperienceExtractorHu:
         """Check if text is likely a job title."""
         return any(indicator in text.lower() for indicator in self.job_indicators)
 
-    def extract_work_experience(self, text: str) -> List[Dict]:
+    def clean_text(self, text: str) -> str:
+        """Remove unwanted Unicode artifacts from text."""
+        # Remove specific unwanted Unicode characters
+        return re.sub(r'[\uf0b7\uf0d8\uf020\u2013\u2022\u2023]+', '', text).strip()
+
+    def extract_work_experience(self, text: str, parsed_sections: Optional[Dict] = None) -> List[Dict]:
         """Extract detailed work experience information."""
+        work_data = []
+        current_entry = None
+
+        # Try to use parsed sections first if available
+        if parsed_sections and parsed_sections.get('experience'):
+            experience_lines = []
+            for section in parsed_sections['experience']:
+                experience_lines.extend([line.strip() for line in section.split('\n') if line.strip()])
+
+            if self._validate_section_data(experience_lines):
+                # Process the extracted lines
+                for line in experience_lines:
+                    # Split line by known delimiters for multiple entries
+                    sub_lines = re.split(r'\s*▪\s*|\s*-\s*', line)
+                    for sub_line in sub_lines:
+                        # Clean the text
+                        sub_line = self.clean_text(sub_line)
+
+                        # Check for date ranges as primary entry points
+                        date = self.extract_date_range(sub_line)
+                        if date:
+                            if current_entry and current_entry.get('descriptions'):
+                                work_data.append(current_entry)
+                            current_entry = {
+                                'company': '',
+                                'job_title': '',
+                                'date': date,
+                                'descriptions': []
+                            }
+                            continue
+
+                        # Identify job titles and companies
+                        if current_entry:
+                            if self.is_likely_job_title(sub_line) and not current_entry['job_title']:
+                                current_entry['job_title'] = sub_line
+                            elif self.is_likely_company(sub_line) and not current_entry['company']:
+                                current_entry['company'] = sub_line
+                            else:
+                                current_entry['descriptions'].append(sub_line)
+
+                if current_entry and current_entry.get('descriptions'):
+                    work_data.append(current_entry)
+
+                return work_data
+
+        # Fallback to current logic if no parsed sections
+        return self._extract_work_experience_fallback(text)
+
+    def _validate_section_data(self, lines: List[str]) -> bool:
+        """Validate if the section data is sufficient for processing."""
+        return len(lines) > 0
+
+    def _extract_work_experience_fallback(self, text: str) -> List[Dict]:
+        """Fallback method to extract work experience using existing logic."""
         if not text:
             return []
 
@@ -223,7 +291,7 @@ class ExperienceExtractorHu:
 
             # Process the matched work section
             work_text = work_match.group(0)
-            lines = [line.strip() for line in work_text.split('\n') if line.strip()]
+            lines = [self.clean_text(line.strip()) for line in work_text.split('\n') if line.strip()]
             
             for i, line in enumerate(lines):
                 # Skip section headers

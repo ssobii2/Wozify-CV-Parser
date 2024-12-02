@@ -47,24 +47,33 @@ def test_cv_section_parser():
     """Generate section outputs for CVs using the parser."""
     # List of test CV files
     cv_files = [
-        "Richard-3.pdf",
-        "RAW-Senior-Fullstack-Developer-Gabor.docx",
-        "Greenformatics_Neufeld-Balazs - CV_eng.docx",
-        "Edvard_Eros_CV.pdf",
-        "DRUIT_CV_F.Zs..pdf",
-        "DRUIT_CV_D GY.pdf",
-        "Konyves_Lajos_CV_EN_.pdf",
-        "My-CV-Simple.pdf",
-        "Ussayed_Resume-Simple.pdf",
-        "Patrik_Suli_CV.pdf",
-        "Abbasi_Resume.pdf",
-        "Aladar_Feher_CV.pdf",
-        "László_Dobi_EN_CV_2024.pdf",
-        "Mark G Kovacs CV 2023.11.pdf",
-        "Medior Software engineer Devora Csaba IDnr 532 (1).pdf",
-        "MindtechApps_CV_LeventeV_Senior_ScrumMaster.pdf",
-        "My-CV.pdf",
+        "Antalóczi Arnold CV.pdf",
+        "Birtók_István_CV.pdf",
+        "CV_HU_GuttmannAndras.docx.pdf",
+        "CV_HUN_Akos_V (1).pdf",
+        "CV_HUN_Szomszed_Norbert.pdf",
+        "FP_CV_HUN.pdf",
+        "TothJozsef_CV_HU.pdf",
     ]
+    # cv_files = [
+    #     "Richard-3.pdf",
+    #     "RAW-Senior-Fullstack-Developer-Gabor.docx",
+    #     "Greenformatics_Neufeld-Balazs - CV_eng.docx",
+    #     "Edvard_Eros_CV.pdf",
+    #     "DRUIT_CV_F.Zs..pdf",
+    #     "DRUIT_CV_D GY.pdf",
+    #     "Konyves_Lajos_CV_EN_.pdf",
+    #     "My-CV-Simple.pdf",
+    #     "Ussayed_Resume-Simple.pdf",
+    #     "Patrik_Suli_CV.pdf",
+    #     "Abbasi_Resume.pdf",
+    #     "Aladar_Feher_CV.pdf",
+    #     "László_Dobi_EN_CV_2024.pdf",
+    #     "Mark G Kovacs CV 2023.11.pdf",
+    #     "Medior Software engineer Devora Csaba IDnr 532 (1).pdf",
+    #     "MindtechApps_CV_LeventeV_Senior_ScrumMaster.pdf",
+    #     "My-CV.pdf",
+    # ]
     
     project_dir = "e:/Projects/Company Projects/Wozify-CV-Parser"
     cv_dir = os.path.join(project_dir, "CVs")

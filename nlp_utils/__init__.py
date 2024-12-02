@@ -206,20 +206,18 @@ class CVExtractor:
         }
 
     def extract_work_experience(self, text: str) -> List[Dict]:
-        """Extract detailed work experience information using ExperienceExtractor."""
+        """Extract detailed work experience information using the appropriate ExperienceExtractor."""
         try:
             language = detect(text)
-            
-            if language == 'hu':
-                # For Hungarian, we don't yet have section parser integration
-                return self.experience_extractor_hu.extract_work_experience(text)
-            
-            # Get parsed sections from cache or parse new
             parsed_sections = self._get_parsed_sections(text)
-            
-            # For English, use the experience extractor with parsed sections
-            return self.experience_extractor.extract_work_experience(text, parsed_sections)
-            
+
+            if language == 'hu':
+                # Use Hungarian experience extractor
+                return self.experience_extractor_hu.extract_work_experience(text, parsed_sections)
+            else:
+                # Use English experience extractor
+                return self.experience_extractor.extract_work_experience(text, parsed_sections)
+
         except Exception as e:
             print(f"Error extracting work experience: {str(e)}")
             return []

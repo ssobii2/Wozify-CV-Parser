@@ -13,99 +13,115 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 class CVSectionParser:
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(CVSectionParser, cls).__new__(cls)
+        return cls._instance
+
     def __init__(self):
-        # Load model and tokenizer locally
-        logger.info("Loading BART-large-MNLI model locally...")
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model = AutoModelForSequenceClassification.from_pretrained("facebook/bart-large-mnli").to(self.device)
-        self.tokenizer = AutoTokenizer.from_pretrained("facebook/bart-large-mnli")
-        logger.info(f"Model loaded successfully on {self.device}")
-        
-        # Language-related patterns and keywords
-        self.language_patterns = {
-            'proficiency_levels': [
-                r'(?i)(native|fluent|advanced|intermediate|basic|beginner|elementary|proficient)',
-                r'(?i)(mother\s*tongue|business\s*level|working\s*knowledge|professional\s*working)',
-                r'(?i)\b(c2|c1|b2|b1|a2|a1)\b'
-            ],
-            'languages': [
-                r'(?i)\b(english|german|french|spanish|hungarian|chinese|japanese|korean|arabic|russian|italian|portuguese|dutch|hindi|urdu|bengali|punjabi|tamil|telugu|marathi|gujarati|kannada|malayalam|thai|vietnamese|indonesian|malay|turkish|persian|polish|czech|slovak|romanian|bulgarian|croatian|serbian|slovenian|ukrainian|greek|hebrew|swedish|norwegian|danish|finnish|estonian|latvian|lithuanian)\b'
-            ],
-            'section_indicators': [
-                r'(?i)^languages?(\s+skills?|\s+proficiency|\s+knowledge)?:?\s*$',
-                r'(?i)^language\s+(skills?|proficiency|knowledge)\s*:?\s*$'
+        if not hasattr(self, 'initialized'):
+            self.initialized = True
+            # Load model and tokenizer locally
+            logger.info("Loading BART-large-MNLI model locally...")
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            self.model = AutoModelForSequenceClassification.from_pretrained("facebook/bart-large-mnli").to(self.device)
+            self.tokenizer = AutoTokenizer.from_pretrained("facebook/bart-large-mnli")
+            logger.info(f"Model loaded successfully on {self.device}")
+            
+            # Load mBERT model for Hungarian language
+            logger.info("Loading mBERT model for Hungarian language...")
+            self.mbert_model = AutoModelForSequenceClassification.from_pretrained("bert-base-multilingual-cased").to(self.device)
+            self.mbert_tokenizer = AutoTokenizer.from_pretrained("bert-base-multilingual-cased")
+            logger.info("mBERT model loaded successfully")
+
+            # Language-related patterns and keywords
+            self.language_patterns = {
+                'proficiency_levels': [
+                    r'(?i)(native|fluent|advanced|intermediate|basic|beginner|elementary|proficient|anyanyelv|folyékony|haladó|középszint|alapszint|kezdő)',
+                    r'(?i)(mother\s*tongue|business\s*level|working\s*knowledge|professional\s*working|anyanyelvi\s*szint|üzleti\s*szint|munkavégzés\s*szintje)',
+                    r'(?i)\b(c2|c1|b2|b1|a2|a1)\b'
+                ],
+                'languages': [
+                    r'(?i)\b(english|german|french|spanish|hungarian|chinese|japanese|korean|arabic|russian|italian|portuguese|dutch|hindi|urdu|bengali|punjabi|tamil|telugu|marathi|gujarati|kannada|malayalam|thai|vietnamese|indonesian|malay|turkish|persian|polish|czech|slovak|romanian|bulgarian|croatian|serbian|slovenian|ukrainian|greek|hebrew|swedish|norwegian|danish|finnish|estonian|latvian|lithuanian|magyar|angol|német|francia|spanyol|olasz|orosz|kínai|japán)\b'
+                ],
+                'section_indicators': [
+                    r'(?i)^languages?(\s+skills?|\s+proficiency|\s+knowledge)?:?\s*$',
+                    r'(?i)^language\s+(skills?|proficiency|knowledge)\s*:?\s*$',
+                    r'(?i)^nyelv(ek)?(\s+készségek?|\s+ismeretek|\s+szint)?:?\s*$'
+                ]
+            }
+            
+            # Technology-related keywords that indicate skills section content
+            self.tech_keywords = {
+                'programming', 'software', 'development', 'technologies', 'frameworks', 'languages',
+                'tools', 'platforms', 'databases', 'methodologies', 'proficient', 'experienced',
+                'knowledge', 'skills', 'expertise', 'competencies', 'stack', 'technical'
+            }
+            
+            # Work experience indicators
+            self.experience_indicators = [
+                r'(?i)(20\d{2}\s*-\s*(20\d{2}|present|current))',  # Year ranges
+                r'(?i)(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s*\d{4}',  # Month Year
+                r'(?i)(improved|developed|managed|led|created|implemented|achieved|increased|reduced|supported)',  # Action verbs
+                r'(?i)(intern|developer|engineer|manager|coordinator|assistant|specialist|analyst)',  # Job titles
+                r'(?i)(\d+%|\d+\s*percent)',  # Percentages
+                r'(?i)(project|team|client|stakeholder|objective|goal)'  # Work-related terms
             ]
-        }
-        
-        # Technology-related keywords that indicate skills section content
-        self.tech_keywords = {
-            'programming', 'software', 'development', 'technologies', 'frameworks', 'languages',
-            'tools', 'platforms', 'databases', 'methodologies', 'proficient', 'experienced',
-            'knowledge', 'skills', 'expertise', 'competencies', 'stack', 'technical'
-        }
-        
-        # Work experience indicators
-        self.experience_indicators = [
-            r'(?i)(20\d{2}\s*-\s*(20\d{2}|present|current))',  # Year ranges
-            r'(?i)(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s*\d{4}',  # Month Year
-            r'(?i)(improved|developed|managed|led|created|implemented|achieved|increased|reduced|supported)',  # Action verbs
-            r'(?i)(intern|developer|engineer|manager|coordinator|assistant|specialist|analyst)',  # Job titles
-            r'(?i)(\d+%|\d+\s*percent)',  # Percentages
-            r'(?i)(project|team|client|stakeholder|objective|goal)'  # Work-related terms
-        ]
-        
-        # Common section headers in CVs
-        self.section_headers = {
-            "profile": [
-                r"(?i)^(about\s*me|profile|summary|personal\s+information|introduction|objective)$",
-                r"(?i)^(professional\s+summary|personal\s+details|personal\s+profile)$"
-            ],
-            "education": [
-                r"(?i)^(education|academic|qualifications?|studies)$",
-                r"(?i)^(educational\s+background|academic\s+history|academic\s+qualifications?)$"
-            ],
-            "experience": [
-                r"(?i)^(experience|employment|work|career|professional\s+experience)$",
-                r"(?i)^(work\s+history|employment\s+history|work\s+experience|professional\s+background)$",
-                r"(?i)^(work\s+experience\s*/?\s*projects?)$" 
-            ],
-            "languages": [
-                r"(?i)^(languages?|language\s+skills?)$",
-                r"(?i)^(language\s+proficiency|linguistic\s+skills?)$"
-            ],
-            "skills": [
-                r"(?i)^(skills?|technical\s+skills?|competencies|expertise|it\s+knowledge)$",
-                r"(?i)^(technical\s+expertise|core\s+competencies|professional\s+skills|technical\s+proficiencies|technical\s+skills)$",
-                r"(?i)^(development\s+tools?|programming\s+knowledge|technical\s+stack)$",
-                r"(?i)^(technologies|tools?(\s+and\s+technologies)?|software|hardware)$"
-            ],
-            "projects": [
-                r"(?i)^(projects?|personal\s+projects?|academic\s+projects?)$",
-                r"(?i)^(key\s+projects?|project\s+experience|technical\s+projects?)$",
-                r"(?i)^(selected\s+projects?|notable\s+projects?)$"
-            ],
-            "certifications": [
-                r"(?i)^(certifications?|certificates?|professional\s+certifications?)$",
-                r"(?i)^(accreditations?|qualifications?|awards?\s+and\s+certifications?)$"
-            ],
-            "awards": [
-                r"(?i)^(awards?|honors?|achievements?)$",
-                r"(?i)^(recognitions?|accomplishments?|awards?\s+and\s+achievements?)$"
-            ],
-            "publications": [
-                r"(?i)^(publications?|research|papers?|conferences?)$",
-                r"(?i)^(published\s+works?|research\s+papers?|scientific\s+publications?)$"
-            ],
-            "interests": [
-                r"(?i)^(interests?|hobbies|activities|interests?,?\s+commitment)$",
-                r"(?i)^(personal\s+interests?|extracurricular|other\s+activities)$"
-            ],
-            "references": [
-                r"(?i)^(references?|recommendations?)$",
-                r"(?i)^(professional\s+references?)$"
-            ]
-        }
-        
+            
+            # Common section headers in CVs
+            self.section_headers = {
+                "profile": [
+                    r"(?i)^(about\s*me|profile|summary|personal\s+information|introduction|objective|bemutatkozás|profil|összefoglalás|személyes\s+információk|bevezetés|célkitűzés)$",
+                    r"(?i)^(professional\s+summary|personal\s+details|personal\s+profile|szakmai\s+összefoglalás|személyes\s+adatok|személyes\s+profil)$"
+                ],
+                "education": [
+                    r"(?i)^(education|academic|qualifications?|studies|oktatás|akadémiai|képesítések?|tanulmányok)$",
+                    r"(?i)^(educational\s+background|academic\s+history|academic\s+qualifications?|oktatási\s+hátter|akadémiai\s+előzmények|akadémiai\s+képesítések?)$"
+                ],
+                "experience": [
+                    r"(?i)^(experience|employment|work|career|professional\s+experience|tapasztalat|foglalkoztatás|munka|karrier|szakmai\s+tapasztalat)$",
+                    r"(?i)^(work\s+history|employment\s+history|work\s+experience|professional\s+background|munkatörténet|foglalkoztatási\s+történet|munkatapasztalat|szakmai\s+hátter)$",
+                    r"(?i)^(work\s+experience\s*/?\s*projects?|munkatapasztalat\s*/?\s*projektek?)$"
+                ],
+                "languages": [
+                    r"(?i)^(languages?|language\s+skills?|nyelv(ek)?|nyelvi\s+készségek?)$",
+                    r"(?i)^(language\s+proficiency|linguistic\s+skills?|nyelvi\s+szint|nyelvi\s+készségek?)$"
+                ],
+                "skills": [
+                    r"(?i)^(skills?|technical\s+skills?|competencies|expertise|it\s+knowledge|készségek?|technikai\s+készségek?|kompetenciák|szakértelem|it\s+ismeretek)$",
+                    r"(?i)^(technical\s+expertise|core\s+competencies|professional\s+skills|technical\s+proficiencies|technical\s+skills|technikai\s+szakértelem|alapvető\s+kompetenciák|szakmai\s+készségek|technikai\s+ismeretek|technikai\s+készségek)$",
+                    r"(?i)^(development\s+tools?|programming\s+knowledge|technical\s+stack|fejlesztési\s+eszközök?|programozási\s+ismeretek|technikai\s+halmaz)$",
+                    r"(?i)^(technologies|tools?(\s+and\s+technologies)?|software|hardware|technológiák|eszközök?(\s+és\s+technológiák)?|szoftver|hardver)$"
+                ],
+                "projects": [
+                    r"(?i)^(projects?|personal\s+projects?|academic\s+projects?|projektek?|személyes\s+projektek?|akadémiai\s+projektek?)$",
+                    r"(?i)^(key\s+projects?|project\s+experience|technical\s+projects?|kulcsfontosságú\s+projektek?|projekt\s+tapasztalat|technikai\s+projektek?)$",
+                    r"(?i)^(selected\s+projects?|notable\s+projects?|kiválasztott\s+projektek?|jelentős\s+projektek?)$"
+                ],
+                "certifications": [
+                    r"(?i)^(certifications?|certificates?|professional\s+certifications?|tanúsítványok?|bizonyítványok?|szakmai\s+tanúsítványok?)$",
+                    r"(?i)^(accreditations?|qualifications?|awards?\s+and\s+certifications?|akkreditációk?|képesítések?|díjak?\s+és\s+tanúsítványok?)$"
+                ],
+                "awards": [
+                    r"(?i)^(awards?|honors?|achievements?|díjak?|kitüntetések?|eredmények?)$",
+                    r"(?i)^(recognitions?|accomplishments?|awards?\s+and\s+achievements?|elismerések?|teljesítmények?|díjak?\s+és\s+eredmények?)$"
+                ],
+                "publications": [
+                    r"(?i)^(publications?|research|papers?|conferences?|publikációk?|kutatás|tanulmányok?|konferenciák?)$",
+                    r"(?i)^(published\s+works?|research\s+papers?|scientific\s+publications?|publikált\s+munkák?|kutatási\s+tanulmányok?|tudományos\s+publikációk?)$"
+                ],
+                "interests": [
+                    r"(?i)^(interests?|hobbies|activities|interests?,?\s+commitment|érdeklődési\s+körök?|hobbi|tevékenységek?|érdeklődési\s+körök?,?\s+elkötelezettség)$",
+                    r"(?i)^(personal\s+interests?|extracurricular|other\s+activities|személyes\s+érdeklődés?|tanórán\s+kívüli|egyéb\s+tevékenységek)$"
+                ],
+                "references": [
+                    r"(?i)^(references?|recommendations?|referenciák?|ajánlások?)$",
+                    r"(?i)^(professional\s+references?|szakmai\s+referenciák?)$"
+                ]
+            }
+            
     def _wait_for_model(self):
         """Wait for the model to be ready."""
         pass
@@ -116,7 +132,11 @@ class CVSectionParser:
         line = line.strip()
         if not line or len(line.split()) > 5:  # Headers are usually short
             return None
-            
+        
+        # Detect language and select model
+        language = self._detect_language(line)
+        model, tokenizer = self._get_model_and_tokenizer(language)
+
         # Check against our header patterns first
         for section, patterns in self.section_headers.items():
             for pattern in patterns:
@@ -140,7 +160,7 @@ class CVSectionParser:
                     hypothesis = f"This is a {candidate} section header"
                     
                     # Tokenize
-                    inputs = self.tokenizer(
+                    inputs = tokenizer(
                         premise,
                         hypothesis,
                         return_tensors="pt",
@@ -150,12 +170,18 @@ class CVSectionParser:
                     ).to(self.device)
                     
                     # Get model prediction
-                    outputs = self.model(**inputs)
+                    outputs = model(**inputs)
                     logits = outputs.logits
                     
+                    # Log logits shape for debugging
+                    logger.debug(f"Logits shape: {logits.shape}")
+
                     # Get probability of entailment (last dimension)
                     probs = torch.softmax(logits, dim=1)
-                    entail_prob = probs[0][2].item()  # Index 2 is entailment
+                    if probs.shape[1] > 2:
+                        entail_prob = probs[0][2].item()  # Index 2 is entailment
+                    else:
+                        entail_prob = probs[0][1].item()  # Adjust if only two classes
                     scores.append(entail_prob)
                 
                 # Find best matching section
@@ -467,3 +493,19 @@ class CVSectionParser:
         has_structure = bool(re.search(r'\w+\s*[-–:]\s*\w+', text))
         
         return has_language or has_structure
+
+    def _detect_language(self, text: str) -> str:
+        """Simple language detection based on presence of Hungarian keywords."""
+        hungarian_keywords = [
+            'magyar', 'nyelv', 'folyékony', 'haladó', 'középszint', 'alapszint'
+        ]
+        text_lower = text.lower()
+        if any(keyword in text_lower for keyword in hungarian_keywords):
+            return 'hungarian'
+        return 'english'
+
+    def _get_model_and_tokenizer(self, language: str):
+        """Return the appropriate model and tokenizer based on the language."""
+        if language == 'hungarian':
+            return self.mbert_model, self.mbert_tokenizer
+        return self.model, self.tokenizer
