@@ -228,22 +228,19 @@ class CVExtractor:
         return self.current_position_extractor.extract_current_position(text, work_experience)
 
     def extract_education(self, text: str) -> List[Dict]:
-        """Extract detailed education information using EducationExtractor."""
+        """Extract education information from text."""
         try:
             language = detect(text)
-            
-            if language == 'hu':
-                # For Hungarian, we don't yet have section parser integration
-                return self.education_extractor_hu.extract_education(text)
-            
-            # Get parsed sections from cache or parse new
             parsed_sections = self._get_parsed_sections(text)
             
-            # For English, use the education extractor with parsed sections
-            return self.education_extractor.extract_education(text, parsed_sections)
-            
+            if language == 'hu':
+                return self.education_extractor_hu.extract_education(text, parsed_sections)
+            else:
+                # For English, pass parsed sections to the education extractor
+                return self.education_extractor.extract_education(text, parsed_sections)
+                
         except Exception as e:
-            print(f"Error extracting education: {str(e)}")
+            print(f"Warning: Education extraction failed: {str(e)}")
             return []
 
     def extract_skills(self, text: str) -> List[str]:
