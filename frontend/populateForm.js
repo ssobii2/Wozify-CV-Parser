@@ -160,20 +160,55 @@ document.addEventListener("DOMContentLoaded", function () {
         element.prepend(styleElement);
 
         // Use html2pdf to generate PDF
-        html2pdf()
-          .from(element)
-          .set({
-            margin: 0,
-            filename: "Generated-CV.pdf",
-            html2canvas: { scale: 2, useCORS: true },
-            jsPDF: {
-              unit: "in",
-              format: [8.5, element.scrollHeight / 105],
-              // format: "a4",
-              orientation: "portrait"
-            },
-          })
-          .save();
+        const a4HeightMm = 297;
+        const pixelsPerMm = 3.7795275591;
+        const a4HeightPx = a4HeightMm * pixelsPerMm;
+        
+        // Get actual content height
+        const contentHeight = Math.max(
+          element.scrollHeight,
+          element.offsetHeight,
+          element.clientHeight,
+          a4HeightPx
+        );
+        
+        // Calculate number of pages needed
+        const numPages = Math.ceil(contentHeight / a4HeightPx);
+        const totalHeight = numPages * a4HeightPx;
+        
+        const opt = {
+          margin: 0,
+          filename: "Generated-CV.pdf",
+          html2canvas: { 
+            scale: 2,
+            useCORS: true,
+            onclone: function(clonedDoc) {
+              const sidebar = clonedDoc.querySelector('.left-sidebar');
+              const mainContent = clonedDoc.querySelector('.main-content');
+              if (sidebar && mainContent) {
+                const maxHeight = Math.max(
+                  mainContent.scrollHeight,
+                  sidebar.scrollHeight,
+                  totalHeight
+                );
+                // Subtract a small amount to prevent extra page
+                const adjustedHeight = maxHeight - 1;
+                sidebar.style.minHeight = adjustedHeight + 'px';
+                mainContent.style.minHeight = adjustedHeight + 'px';
+                clonedDoc.querySelector('.wrapper').style.minHeight = adjustedHeight + 'px';
+              }
+            }
+          },
+          jsPDF: {
+            unit: "mm",
+            format: "a4",
+            orientation: "portrait",
+            compress: true
+          },
+          pagebreak: { mode: 'avoid-all' }
+        };
+
+        html2pdf().set(opt).from(element).save();
       })
       .catch((error) => console.error("Error fetching CSS:", error));
   });
