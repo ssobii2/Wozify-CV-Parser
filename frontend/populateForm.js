@@ -185,6 +185,20 @@ document.addEventListener("DOMContentLoaded", function () {
             onclone: function(clonedDoc) {
               const sidebar = clonedDoc.querySelector('.left-sidebar');
               const mainContent = clonedDoc.querySelector('.main-content');
+              
+              // Add page break markers with consistent spacing
+              const workEntries = mainContent.querySelectorAll('#work-entries > div');
+              workEntries.forEach((entry, index) => {
+                const entryHeight = entry.offsetHeight;
+                const currentY = entry.offsetTop;
+                const pageHeight = 297 * 3.779527559; // A4 height in pixels
+                
+                // If this entry would cross a page boundary
+                if (currentY % pageHeight + entryHeight > pageHeight) {
+                  entry.style.marginTop = (pageHeight - (currentY % pageHeight) + 40) + 'px';
+                }
+              });
+              
               if (sidebar && mainContent) {
                 const maxHeight = Math.max(
                   mainContent.scrollHeight,
