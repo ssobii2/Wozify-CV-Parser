@@ -2,6 +2,8 @@ import os
 from typing import Dict, List
 import logging
 import re
+import spacy
+from pathlib import Path
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -19,7 +21,14 @@ class CVSectionParser:
             self.initialized = True
             # Initialize patterns
             self._init_patterns()
-            logger.info("CVSectionParser initialized with pattern matching")
+            
+            # Load the text classification model once during initialization
+            try:
+                self.nlp = spacy.load("textcat_output_v2/model-best")
+                logger.info("Loaded text classification model")
+            except Exception as e:
+                self.nlp = None
+                logger.warning(f"Text classification model not found, falling back to pattern matching only: {str(e)}")
 
     def _init_patterns(self):
         # Language-related patterns and keywords
@@ -67,7 +76,7 @@ class CVSectionParser:
                 r"(?i)^(educational\s+background|academic\s+history|academic\s+qualifications?|oktatási\s+hátter|akadémiai\s+előzmények|akadémiai\s+képesítések?)$"
             ],
             "experience": [
-                r"(?i)^(experience|employment|work|career|professional\s+experience|tapasztalat|foglalkoztatás|munka|karrier|szakmai\s+tapasztalat)$",
+                r"(?i)^(experience|employment|work|career|professional\s+experience|tapasztalat|foglalkoztatós|munka|karrier|szakmai\s+tapasztalat)$",
                 r"(?i)^(work\s+history|employment\s+history|work\s+experience|professional\s+background|munkatörténet|foglalkoztatási\s+történet|munkatapasztalat|szakmai\s+hátter)$",
                 r"(?i)^(work\s+experience\s*/?\s*projects?|munkatapasztalat\s*/?\s*projektek?)$"
             ],
@@ -105,6 +114,10 @@ class CVSectionParser:
             "references": [
                 r"(?i)^(references?|recommendations?|referenciák?|ajánlások?)$",
                 r"(?i)^(professional\s+references?|szakmai\s+referenciák?)$"
+            ],
+            "summary": [
+                r"(?i)^(summary|professional\s+summary|career\s+summary|executive\s+summary|összefoglalás|szakmai\s+összefoglalás)$",
+                r"(?i)^(brief\s+summary|career\s+objective|professional\s+objective|szakmai\s+célkitűzés)$"
             ]
         }
 
@@ -123,7 +136,6 @@ class CVSectionParser:
         for section, patterns in self.section_headers.items():
             for pattern in patterns:
                 if re.match(pattern, line):
-                    logger.info(f"Found section header: {line} -> {section}")
                     found_sections.add(section)
                     return section
         
@@ -149,14 +161,13 @@ class CVSectionParser:
         for section, keywords in section_keywords.items():
             if any(keyword in line_lower for keyword in keywords):
                 if section not in found_sections:  # Prioritize unfound sections
-                    logger.info(f"Found section header through keywords: {line} -> {section}")
                     found_sections.add(section)
                     return section
         
         return None
 
     def _is_likely_new_section(self, line: str) -> bool:
-        """Check if a line is likely to be a new section header."""
+        """Enhanced check if a line is likely to be a new section header."""
         # Skip empty lines
         if not line.strip():
             return False
@@ -166,28 +177,47 @@ class CVSectionParser:
             r"(?i)(19|20)\d{2}\s*[-–]\s*((19|20)\d{2}|present|current)",  # Year ranges
             r"(?i)^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s*\d{4}",  # Month Year
             r"(?i)\d{1,2}/\d{4}",  # MM/YYYY
-            r"(?i)\d{1,2}\.\d{4}"  # MM.YYYY
+            r"(?i)\d{1,2}\.\d{4}",  # MM.YYYY
+            r"(?i)\d{4}\s*[-–]\s*(?:Present|Current|Now|\d{4})",  # 2023 - Present
+            r"(?i)(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}\s*[-–]",  # January 2023 -
+            r"(?i)\d{2}/\d{4}\s*[-–]"  # 01/2023 -
         ]
         
-        for pattern in date_patterns:
-            if re.search(pattern, line.lower()):
-                return False
-            
-        # Check for bullet points or list markers
-        if line.strip().startswith(('•', '-', '•', '○', '●', '*', '→')):
+        # Return False if line matches date patterns
+        if any(re.search(pattern, line) for pattern in date_patterns):
             return False
+            
+        # Check for bullet points or list markers at start of line
+        if line.strip().startswith(('•', '-', '•', '○', '●', '*', '→', '▪', '◦')):
+            return False
+            
+        # Check if line is all caps and short (likely a header)
+        if (line.isupper() and len(line.split()) <= 4 and 
+            not any(char.isdigit() for char in line)):
+            return True
             
         # Check if line is short and possibly a header
         words = line.split()
         if 1 <= len(words) <= 5:
             # Check if first word is capitalized and not a common sentence starter
-            common_starters = {'i', 'we', 'they', 'he', 'she', 'it', 'the', 'a', 'an'}
+            common_starters = {'i', 'we', 'they', 'he', 'she', 'it', 'the', 'a', 'an', 'my', 'our', 'your'}
             first_word = words[0].lower()
-            if words[0][0].isupper() and first_word not in common_starters:
+            
+            # Additional check for common header words
+            common_header_words = {
+                'summary', 'profile', 'experience', 'education', 'skills',
+                'projects', 'achievements', 'certifications', 'publications',
+                'awards', 'interests', 'references', 'contact', 'personal',
+                'work', 'employment', 'qualification', 'objective', 'about',
+                'languages', 'expertise', 'professional'
+            }
+            
+            if (words[0][0].isupper() and first_word not in common_starters and
+                any(word.lower() in common_header_words for word in words)):
                 return True
             
         return False
-        
+
     def _clean_content(self, content: str) -> str:
         """Clean and normalize content."""
         # Remove multiple newlines
@@ -278,62 +308,55 @@ class CVSectionParser:
         return '\n'.join(processed_lines)
 
     def parse_sections(self, text: str) -> Dict[str, List[str]]:
-        """Parse a CV text into different sections."""
+        """Parse a CV text into different sections with improved splitting logic."""
         logger.info("Starting CV parsing...")
-        
-        # Preprocess text to handle two-column layouts
+
+        # Preprocess text
         text = self._preprocess_text(text)
         
-        # Initialize sections with all possible section types
+        # Initialize sections including summary (all lowercase)
         sections = {
+            "summary": [],
             "profile": [],
             "education": [],
             "experience": [],
             "languages": [],
-            "skills": []
+            "skills": [],
+            "projects": [],
+            "certifications": [],
+            "awards": [],
+            "publications": [],
+            "interests": [],
+            "references": []
         }
         
-        # Track which sections we've found to avoid unnecessary ML
         found_sections = set()
-        
-        # Add optional sections
-        for section in self.section_headers.keys():
-            if section not in sections:
-                sections[section] = []
-        
-        lines = text.split('\n')
         current_section = None
         buffer = []
         
-        # Handle content before first section as profile
-        initial_buffer = []
-        for line in lines:
-            if self._is_likely_new_section(line) and self._identify_section_header(line, found_sections):
-                if initial_buffer:
-                    content = self._clean_content('\n'.join(initial_buffer))
-                    if content:
-                        sections["profile"].append(content)
-                        found_sections.add("profile")
-                break
-            initial_buffer.append(line)
-        
-        for i, line in enumerate(lines):
-            line = line.strip()
+        # Process text line by line with improved section detection
+        lines = text.split('\n')
+        current_idx = 0
+        buffer = []
+        current_section = None
+
+        while current_idx < len(lines):
+            line = lines[current_idx].strip()
             
             # Skip empty lines at the start
             if not line and not current_section and not buffer:
+                current_idx += 1
                 continue
-            
-            # Check if this line is a section header
+
+            # Check for new section
             if self._is_likely_new_section(line):
                 section = self._identify_section_header(line, found_sections)
                 
                 if section:
-                    # Save previous section content if exists
+                    # Process previous section's content
                     if current_section and buffer:
                         content = self._clean_content('\n'.join(buffer))
                         if content:
-                            # Check for language content within other sections
                             if self._contains_language_info(content):
                                 language_content, remaining_content = self._extract_language_content(content)
                                 if language_content:
@@ -346,38 +369,57 @@ class CVSectionParser:
                         buffer = []
                     
                     current_section = section
-                    buffer = [line]
+                    current_idx += 1
                     continue
-            
-            # If we have a current section, add to buffer
+
+            # Handle content
             if current_section:
-                buffer.append(line)
-            elif not current_section and line.strip():
-                # If no section identified yet and line is not empty, treat as profile
-                current_section = "profile"
-                buffer.append(line)
-            
-            # If we hit a significant gap between content, save current buffer
-            if not line and buffer and len(buffer) > 1:
-                content = self._clean_content('\n'.join(buffer))
-                if content:
-                    # Check for language content
-                    if self._contains_language_info(content):
-                        language_content, remaining_content = self._extract_language_content(content)
-                        if language_content:
-                            sections['languages'].append(language_content)
-                            found_sections.add('languages')
-                        if remaining_content and current_section != 'languages':
-                            sections[current_section].append(remaining_content)
+                # Check for natural content breaks
+                if line and not self._is_likely_separator(line, 
+                    lines[current_idx + 1] if current_idx + 1 < len(lines) else ""):
+                    buffer.append(line)
+                else:
+                    # Process current buffer if we hit a separator
+                    if buffer:
+                        content = self._clean_content('\n'.join(buffer))
+                        if content:
+                            if self._contains_language_info(content):
+                                language_content, remaining_content = self._extract_language_content(content)
+                                if language_content:
+                                    sections['languages'].append(language_content)
+                                    found_sections.add('languages')
+                                if remaining_content and current_section != 'languages':
+                                    sections[current_section].append(remaining_content)
+                            else:
+                                sections[current_section].append(content)
+                        buffer = []
+                    if line:
+                        buffer.append(line)
+            elif line:
+                # If no section identified yet, classify between summary and profile
+                if self.nlp and current_section in ['summary', 'profile', 'education', 'experience', 'skills']:
+                    doc = self.nlp(line)
+                    scores = doc.cats
+                    if scores.get('summary', 0) > 0.6:
+                        if not found_sections.intersection({'summary', 'profile'}):
+                            current_section = 'summary'
+                            found_sections.add('summary')
                     else:
-                        sections[current_section].append(content)
-                buffer = []
-        
-        # Don't forget the last section
+                        if 'summary' not in found_sections:
+                            current_section = 'profile'
+                            found_sections.add('profile')
+                else:
+                    if not found_sections.intersection({'summary', 'profile'}):
+                        current_section = 'profile'
+                        found_sections.add('profile')
+                buffer.append(line)
+
+            current_idx += 1
+
+        # Process final section
         if current_section and buffer:
             content = self._clean_content('\n'.join(buffer))
             if content:
-                # Check for language content in the last section
                 if self._contains_language_info(content):
                     language_content, remaining_content = self._extract_language_content(content)
                     if language_content:
@@ -387,30 +429,24 @@ class CVSectionParser:
                         sections[current_section].append(remaining_content)
                 else:
                     sections[current_section].append(content)
-        
-        # Remove duplicates while preserving order
-        for section in sections:
-            if sections[section]:
-                seen = set()
-                sections[section] = [x for x in sections[section] if not (x in seen or seen.add(x))]
-        
-        logger.info(f"Finished parsing CV into {len(sections)} sections")
+
         return sections
 
     def _contains_language_info(self, text: str) -> bool:
         """Check if text contains language-related information."""
-        # Language indicators
-        language_patterns = [
-            r'\b(?:language|nyelv)[s]?\b',  # Language headers
-            r'\b(?:english|hungarian|german|french|spanish)\b',  # Common languages
-            r'\b(?:angol|magyar|német|francia|spanyol)\b',  # Hungarian language names
-            r'\b(?:native|fluent|advanced|intermediate|basic)\b',  # Proficiency levels
-            r'\b(?:anyanyelv|folyékony|haladó|középszint|alapszint)\b',  # Hungarian proficiency
-            r'\b[ABC][12]\b'  # CEFR levels
-        ]
+        # Only consider text as language section if it has a language section indicator
+        # and at least one valid language line
+        has_section_indicator = any(
+            re.search(pattern, text, re.IGNORECASE) 
+            for pattern in self.language_patterns['section_indicators']
+        )
         
-        text_lower = text.lower()
-        return any(re.search(pattern, text_lower) for pattern in language_patterns)
+        if not has_section_indicator:
+            return False
+        
+        # Check if any line in the text is a valid language line
+        lines = text.split('\n')
+        return any(self._is_language_line(line) for line in lines)
 
     def _extract_language_content(self, text: str) -> tuple[str, str]:
         """Extract language-related content from text.
@@ -432,27 +468,33 @@ class CVSectionParser:
 
     def _is_language_line(self, text: str) -> bool:
         """Check if a line contains language information."""
-        # Common language patterns
-        language_patterns = [
-            r'\b(?:english|hungarian|german|french|spanish|italian|russian|chinese|japanese)\b',
-            r'\b(?:angol|magyar|német|francia|spanyol|olasz|orosz|kínai|japán)\b',
-            r'\b(?:native|fluent|advanced|intermediate|basic|beginner)\b',
-            r'\b(?:anyanyelv|folyékony|haladó|középszint|alapszint|kezdő)\b',
-            r'\b[ABC][12]\b',
-            r'(?:language|nyelv)[s]?\s*:',
-            r'\b(?:mother tongue|business level|working knowledge)\b',
-            r'\b(?:anyanyelvi szint|üzleti szint|munkavégzés szintje)\b'
-        ]
+        # Must contain both a language name and a proficiency level
+        has_language_name = any(re.search(pattern, text.lower()) for pattern in self.language_patterns['languages'])
+        has_proficiency = any(re.search(pattern, text.lower()) for pattern in self.language_patterns['proficiency_levels'])
         
-        text_lower = text.lower()
+        # Line must be relatively short (typical for language entries)
+        is_short = len(text.split()) <= 12
         
-        # Check for language patterns
-        has_language = any(re.search(pattern, text_lower) for pattern in language_patterns)
+        # Must not contain work experience indicators
+        has_work_exp = any(re.search(pattern, text, re.IGNORECASE) for pattern in self.experience_indicators)
         
-        # Check for typical language line structure (Language - Level)
-        has_structure = bool(re.search(r'\w+\s*[-–:]\s*\w+', text))
+        # Must not contain skill-related technical terms
+        has_tech_terms = any(keyword in text.lower() for keyword in self.tech_keywords)
         
-        return has_language or has_structure
+        # Must be in a typical language statement format
+        typical_format = bool(re.search(
+            r'(?i)\b(english|german|french|spanish|hungarian|chinese|japanese|korean|arabic|russian|italian|portuguese|dutch|magyar|angol|német|francia|spanyol)\b[\s\-:]+\b(native|fluent|advanced|intermediate|basic|beginner|c1|c2|b1|b2|a1|a2)\b',
+            text
+        ))
+        
+        return (
+            has_language_name 
+            and has_proficiency 
+            and is_short 
+            and not has_work_exp 
+            and not has_tech_terms
+            and typical_format
+        )
 
     def _detect_language(self, text: str) -> str:
         """Simple language detection based on presence of Hungarian keywords."""
@@ -469,3 +511,33 @@ class CVSectionParser:
         if language == 'hungarian':
             return None, None
         return None, None
+
+    def _is_likely_separator(self, line: str, next_line: str = "") -> bool:
+        """Check if a line is likely a natural separator in the CV."""
+        # Common date patterns
+        date_patterns = [
+            r'\d{4}\s*[-–]\s*(?:Present|Current|Now|\d{4})',  # 2023 - Present
+            r'(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}\s*[-–]',  # January 2023 -
+            r'\d{2}/\d{4}\s*[-–]',  # 01/2023 -
+            r'\d{1,2}\.\d{4}',  # MM.YYYY
+            r'\d{1,2}/\d{4}'  # MM/YYYY
+        ]
+        
+        # Check if line is a date range
+        if any(re.search(pattern, line, re.IGNORECASE) for pattern in date_patterns):
+            return True
+        
+        # Check if line starts with bullet points
+        if line.strip().startswith(('•', '-', '*', '▪', '◦', '○', '●', '→')):
+            return True
+        
+        # Check if line is all caps and short (likely a header)
+        if (line.isupper() and len(line.split()) <= 4 and 
+            not any(char.isdigit() for char in line)):
+            return True
+        
+        # Check for multiple consecutive empty lines
+        if not line.strip() and not next_line.strip():
+            return True
+        
+        return False

@@ -25,3 +25,5 @@ __pycache__/
 *.docx
 
 app.log
+
+textcat_output_v2/

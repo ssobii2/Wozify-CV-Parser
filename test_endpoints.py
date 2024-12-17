@@ -45,68 +45,47 @@ def extract_text_from_file(file_path):
 
 def test_cv_section_parser():
     """Generate section outputs for CVs using the parser."""
-    # List of test CV files
-    cv_files = [
-        "Antalóczi Arnold CV.pdf",
-        "Birtók_István_CV.pdf",
-        "CV_HU_GuttmannAndras.docx.pdf",
-        "CV_HUN_Akos_V (1).pdf",
-        "CV_HUN_Szomszed_Norbert.pdf",
-        "FP_CV_HUN.pdf",
-        "TothJozsef_CV_HU.pdf",
-    ]
-    # cv_files = [
-    #     "Richard-3.pdf",
-    #     "RAW-Senior-Fullstack-Developer-Gabor.docx",
-    #     "Greenformatics_Neufeld-Balazs - CV_eng.docx",
-    #     "Edvard_Eros_CV.pdf",
-    #     "DRUIT_CV_F.Zs..pdf",
-    #     "DRUIT_CV_D GY.pdf",
-    #     "Konyves_Lajos_CV_EN_.pdf",
-    #     "My-CV-Simple.pdf",
-    #     "Ussayed_Resume-Simple.pdf",
-    #     "Patrik_Suli_CV.pdf",
-    #     "Abbasi_Resume.pdf",
-    #     "Aladar_Feher_CV.pdf",
-    #     "László_Dobi_EN_CV_2024.pdf",
-    #     "Mark G Kovacs CV 2023.11.pdf",
-    #     "Medior Software engineer Devora Csaba IDnr 532 (1).pdf",
-    #     "MindtechApps_CV_LeventeV_Senior_ScrumMaster.pdf",
-    #     "My-CV.pdf",
-    # ]
-    
     project_dir = "e:/Projects/Company Projects/Wozify-CV-Parser"
     cv_dir = os.path.join(project_dir, "CVs")
     output_dir = os.path.join(project_dir, "outputs")
-    os.makedirs(output_dir, exist_ok=True)
     
-    for cv_file in cv_files:
-        pdf_path = os.path.join(cv_dir, cv_file)
-        logger.info(f"\nProcessing CV: {cv_file}")
+    # Create directories for English and Hungarian CVs
+    cv_dir_hu = os.path.join(cv_dir, "hungarian")
+    cv_dir_en = os.path.join(cv_dir, "english")
+    os.makedirs(cv_dir_hu, exist_ok=True)
+    os.makedirs(cv_dir_en, exist_ok=True)
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Process CVs from both directories
+    for lang_dir, lang in [(cv_dir_hu, "Hungarian"), (cv_dir_en, "English")]:
+        logger.info(f"\nProcessing {lang} CVs...")
         
-        # Extract text from PDF
-        cv_text = extract_text_from_file(pdf_path)
-        if cv_text is None:
-            logger.error(f"Skipping {cv_file} due to text extraction error")
-            continue
+        # Get all PDF and DOCX files from the directory
+        cv_files = [f for f in os.listdir(lang_dir) 
+                   if f.lower().endswith(('.pdf', '.docx'))]
+        
+        for cv_file in cv_files:
+            logger.info(f"Processing CV: {cv_file}")
             
-        # Parse sections
-        sections = cv_section_parser.parse_sections(cv_text)
-        
-        # Create output JSON file
-        output_filename = os.path.splitext(cv_file)[0] + "_sections.json"
-        output_path = os.path.join(output_dir, output_filename)
-        
-        # Save sections to JSON file
-        with open(output_path, 'w', encoding='utf-8') as f:
-            json.dump(sections, f, ensure_ascii=False, indent=2)
-        
-        # Log sections for verification
-        logger.info(f"Saved sections to: {output_filename}")
-        for section, content in sections.items():
-            logger.info(f"\n{section.upper()}:")
-            for item in content:
-                logger.info(f"- {item.strip()}")
+            cv_path = os.path.join(lang_dir, cv_file)
+            cv_text = extract_text_from_file(cv_path)
+            if cv_text is None:
+                logger.error(f"Failed to process {cv_file}")
+                continue
+                
+            sections = cv_section_parser.parse_sections(cv_text)
+            
+            # Create language-specific output subdirectories
+            lang_output_dir = os.path.join(output_dir, lang.lower())
+            os.makedirs(lang_output_dir, exist_ok=True)
+            
+            output_filename = os.path.splitext(cv_file)[0] + "_sections.json"
+            output_path = os.path.join(lang_output_dir, output_filename)
+            
+            with open(output_path, 'w', encoding='utf-8') as f:
+                json.dump(sections, f, ensure_ascii=False, indent=2)
+            
+            logger.info(f"Successfully processed: {cv_file}")
 
 if __name__ == "__main__":
     test_cv_section_parser()
