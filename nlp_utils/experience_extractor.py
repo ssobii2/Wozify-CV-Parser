@@ -15,7 +15,7 @@ class ExperienceExtractor:
         
         self.job_indicators = [
             'developer', 'engineer', 'manager', 'consultant', 'analyst', 
-            'specialist', 'coordinator', 'assistant', 'director', 'lead',
+            'specialist', 'coordinator', 'assistant', 'director', 'lead', 'internship',
             'intern', 'trainee', 'administrator', 'supervisor'
         ]
         
@@ -189,190 +189,183 @@ class ExperienceExtractor:
 
     def extract_work_experience(self, text: str, parsed_sections: Optional[Dict] = None) -> List[Dict]:
         """Extract detailed work experience information."""
-        work_data = []
-        current_entry = None
-        
-        # Try to use parsed sections first if available
-        if parsed_sections and parsed_sections.get('experience'):
-            experience_lines = []
-            for section in parsed_sections['experience']:
-                experience_lines.extend([line.strip() for line in section.split('\n') if line.strip()])
+        try:
+            work_data = []
+            current_entry = None
             
-            if self._validate_section_data(experience_lines):
-                return self._process_experience_lines(experience_lines)
-            print("Parsed section data invalid or insufficient, using fallback")
-        
-        # Fallback to regex-based extraction
-        work_pattern = r'(?:WORK\s*EXPERIENCE|EXPERIENCE|EMPLOYMENT|PROFESSIONAL\s*BACKGROUND|WORK\s*HISTORY).*?(?=\n\s*(?:EDUCATION|SKILLS|PROJECTS|LANGUAGES|CERTIFICATIONS|INTERESTS|$))'
-        work_match = re.search(work_pattern, text, re.DOTALL | re.IGNORECASE)
-        
-        if work_match:
-            work_text = work_match.group(0)
-            lines = [line.strip() for line in work_text.split('\n') if line.strip()]
-            return self._process_experience_lines(lines)
-        
-        return [{
-            'company': '',
-            'job_title': '',
-            'date': '',
-            'descriptions': []
-        }]
+            # Check if we have experience data in parsed sections
+            if parsed_sections and parsed_sections.get('experience'):
+                experience_sections = parsed_sections.get('experience', [])
+                experience_lines = []
+                
+                # Handle different possible formats of experience sections
+                if isinstance(experience_sections, list):
+                    for section in experience_sections:
+                        if isinstance(section, str):
+                            lines = re.split(r'(?:\n|(?<=\s)(?:[•\-\*\⚬\○\●\■\□\▪\▫]|\d+\.)\s*)', section)
+                            experience_lines.extend([self._clean_description(line) for line in lines if line and line.strip()])
+                elif isinstance(experience_sections, str):
+                    lines = re.split(r'(?:\n|(?<=\s)(?:[•\-\*\⚬\○\●\■\□\▪\▫]|\d+\.)\s*)', experience_sections)
+                    experience_lines.extend([self._clean_description(line) for line in lines if line and line.strip()])
+                
+                # Process the lines
+                for i, line in enumerate(experience_lines):
+                    # Skip empty lines and common section headers
+                    if not line or re.match(r'(?i)^(work\s+experience|experience|employment|professional\s+background|work\s+history)$', line):
+                        continue
+                    
+                    # Look for date ranges as primary entry points
+                    date = self.extract_date_range(line)
+                    
+                    if date:
+                        # Save previous entry if it exists
+                        if current_entry:
+                            work_data.append(current_entry)
+                        
+                        # Start new entry
+                        current_entry = {
+                            'company': '',
+                            'job_title': '',
+                            'date': date,
+                            'descriptions': []
+                        }
+                        
+                        # Look at surrounding lines for job title and company
+                        for j in range(max(0, i-2), min(i+2, len(experience_lines))):
+                            context_line = experience_lines[j].strip()
+                            if not context_line or context_line == line:
+                                continue
+                                
+                            # Skip if line contains a date
+                            if self.extract_date_range(context_line):
+                                continue
+                                
+                            # Try to identify job title first
+                            if not current_entry['job_title'] and self.is_likely_job_title(context_line):
+                                current_entry['job_title'] = self._clean_text(context_line)
+                            # Then try to identify company
+                            elif not current_entry['company'] and self.is_likely_company(context_line):
+                                current_entry['company'] = self._clean_text(context_line)
+                            elif not current_entry['company'] and self.is_valid_company_structure(context_line):
+                                current_entry['company'] = self._clean_text(context_line)
+                    elif current_entry:
+                        # Process descriptions, removing bullets and standardizing format
+                        cleaned_line = self._clean_description(line)
+                        if len(cleaned_line) > 20:  # Minimum length for meaningful content
+                            # Skip if line contains a date
+                            if self.extract_date_range(cleaned_line):
+                                continue
+                                
+                            # Try to identify missing job title or company
+                            if not current_entry['job_title'] and self.is_likely_job_title(cleaned_line):
+                                current_entry['job_title'] = self._clean_text(cleaned_line)
+                            elif not current_entry['company'] and self.is_likely_company(cleaned_line):
+                                current_entry['company'] = self._clean_text(cleaned_line)
+                            elif not current_entry['company'] and self.is_valid_company_structure(cleaned_line):
+                                current_entry['company'] = self._clean_text(cleaned_line)
+                            else:
+                                current_entry['descriptions'].append(cleaned_line)
+                
+                # Add the last entry
+                if current_entry:
+                    work_data.append(current_entry)
+                
+                # Return the work data if we have any entries
+                if work_data:
+                    return self._clean_work_data(work_data)
+                
+            # Only use fallback if no experience array exists or no entries were found
+            print("No experience array found in parsed sections, using fallback")
+            return self.fallback_extract_descriptions(text)
+            
+        except Exception as e:
+            print(f"Error in extract_work_experience: {str(e)}")
+            return []
 
-    def _validate_section_data(self, lines: List[str]) -> bool:
-        """Validate that the section data contains meaningful experience information."""
-        if not lines:
-            return False
+    def _clean_description(self, text: str) -> str:
+        """Clean and standardize description text."""
+        # Remove bullet points and numbers at start
+        text = re.sub(r'^[•\-\*\⚬\○\●\■\□\▪\▫]\s*', '', text.strip())
+        text = re.sub(r'^\d+\.\s*', '', text)
         
-        # Check for presence of dates
-        has_dates = any(self.extract_date_range(line) for line in lines)
+        # Remove extra whitespace and standardize spacing
+        text = ' '.join(text.split())
         
-        # Check for presence of job titles
-        has_job_titles = any(self.is_likely_job_title(line) for line in lines)
+        # Capitalize first letter if it's a complete sentence
+        if text and len(text) > 3 and text[0].isalpha():
+            text = text[0].upper() + text[1:]
         
-        # Check for presence of companies
-        has_companies = any(self.is_likely_company(line) for line in lines)
-        
-        # Check for presence of descriptions
-        has_descriptions = any(len(line) > 30 and not any(keyword in line.lower() 
-            for keyword in ['education', 'skills', 'projects', 'languages']) 
-            for line in lines)
-        
-        return has_dates and (has_job_titles or has_companies) and has_descriptions
+        return text
 
-    def _process_experience_lines(self, lines: List[str]) -> List[Dict]:
-        """Process experience lines into structured data."""
-        work_data = []
-        current_entry = None
+    def _clean_text(self, text: str) -> str:
+        """Clean and standardize general text."""
+        # Remove any bullet points or numbers
+        text = re.sub(r'^[•\-\*\⚬\○\●\■\□\▪\▫]\s*', '', text.strip())
+        text = re.sub(r'^\d+\.\s*', '', text)
         
-        # First pass: identify main entry points and structure
-        for i, line in enumerate(lines):
-            line = line.strip()
-            
-            # Skip section headers and empty lines
-            if (re.match(r'(?:WORK\s*EXPERIENCE|EXPERIENCE|EMPLOYMENT|PROFESSIONAL\s*BACKGROUND|WORK\s*HISTORY)', 
-                line, re.IGNORECASE) or not line.strip()):
-                continue
-            
-            # Look for date ranges as primary entry points
-            date = self.extract_date_range(line)
-            
-            # If we find a date, it's likely a new experience entry
-            if date:
-                # Save previous entry if it exists and has required fields
-                if current_entry and current_entry.get('descriptions'):
-                    if current_entry.get('job_title') or current_entry.get('company'):
-                        work_data.append(current_entry)
-                
-                # Initialize new entry
-                current_entry = {
-                    'company': '',
-                    'job_title': '',
-                    'date': date,
-                    'descriptions': []
-                }
-                
-                # Look for job titles and companies in surrounding context
-                context_start = max(0, i-3)  # Look up to 3 lines before
-                context_end = min(len(lines), i+2)  # Look up to 2 lines after
-                
-                # First try to find job title, then company
-                for j in range(context_start, context_end):
-                    if j == i:  # Skip the date line itself
-                        continue
-                    
-                    context_line = lines[j].strip().lstrip('-•* ')
-                    
-                    # Skip if line is too short, contains a date, or is a section header
-                    if (len(context_line) < 3 or 
-                        self.extract_date_range(context_line) or 
-                        any(header in context_line.lower() for header in 
-                            ['education', 'skills', 'languages', 'projects'])):
-                        continue
-                    
-                    # First try to identify job title
-                    if not current_entry['job_title'] and self.is_likely_job_title(context_line):
-                        current_entry['job_title'] = context_line
-                        continue
-                    
-                    # Then try to identify company
-                    if not current_entry['company'] and self.is_likely_company(context_line):
-                        current_entry['company'] = context_line
-                        continue
-                
-                continue
-            
-            # If we have a current entry, process the line
-            if current_entry:
-                clean_line = line.strip().lstrip('-•* ')
-                
-                # Skip empty lines and section headers
-                if not clean_line or any(header in clean_line.lower() for header in 
-                    ['education', 'skills', 'languages', 'projects']):
-                    continue
-                
-                # If line is a bullet point or starts with action verb, it's likely a description
-                if (clean_line.startswith(('•', '-', '✓', '*', '→')) or 
-                    re.match(r'^\d+\.', clean_line) or
-                    any(verb in clean_line.lower() for verb in [
-                        'developed', 'managed', 'led', 'created', 'implemented',
-                        'designed', 'improved', 'built', 'maintained', 'responsible',
-                        'achieved', 'increased', 'reduced', 'supported', 'coordinated'
-                    ])):
-                    if len(clean_line) > 10:  # Minimum meaningful length
-                        current_entry['descriptions'].append(clean_line)
-                    continue
-                
-                # If not a description, try to identify missing job title or company
-                if not current_entry['job_title'] and self.is_likely_job_title(clean_line):
-                    current_entry['job_title'] = clean_line
-                elif not current_entry['company'] and self.is_likely_company(clean_line):
-                    current_entry['company'] = clean_line
-                elif len(clean_line) > 10:  # If still not identified, add as description
-                    current_entry['descriptions'].append(clean_line)
-        
-        # Add the last entry if it exists and has required fields
-        if current_entry and current_entry.get('descriptions'):
-            if current_entry.get('job_title') or current_entry.get('company'):
-                work_data.append(current_entry)
-        
-        # Post-process entries
-        processed_data = []
+        # Standardize spacing
+        return ' '.join(text.split())
+
+    def _clean_work_data(self, work_data: List[Dict]) -> List[Dict]:
+        """Clean and validate the extracted work experience data."""
+        cleaned_data = []
         for entry in work_data:
-            # Clean up entries
-            cleaned_entry = {
-                'company': entry.get('company', '').strip().rstrip(',.:;'),
-                'job_title': entry.get('job_title', '').strip().rstrip(',.:;'),
-                'date': entry.get('date', ''),
-                'descriptions': []
-            }
-            
-            # Clean and deduplicate descriptions
-            seen_descriptions = set()
-            for desc in entry.get('descriptions', []):
-                desc = desc.strip().rstrip(',.:;')
-                if (len(desc) > 10 and  # Minimum meaningful length
-                    desc.lower() not in seen_descriptions and  # Not a duplicate
-                    not self.is_likely_job_title(desc) and  # Not a job title
-                    not self.is_likely_company(desc)):  # Not a company name
-                    cleaned_entry['descriptions'].append(desc)
-                    seen_descriptions.add(desc.lower())
-            
-            # Only add entries that have required fields
-            if ((cleaned_entry['job_title'] or cleaned_entry['company']) and 
-                cleaned_entry['descriptions']):
-                processed_data.append(cleaned_entry)
+            if entry.get('descriptions'):
+                # Remove duplicates while preserving order
+                seen = set()
+                entry['descriptions'] = [
+                    desc for desc in entry['descriptions']
+                    if desc and desc not in seen and not seen.add(desc)
+                ]
+                
+                # Only include entries with meaningful content
+                if entry['descriptions']:
+                    cleaned_data.append({
+                        'company': entry.get('company', ''),
+                        'job_title': entry.get('job_title', ''),
+                        'date': entry.get('date', ''),
+                        'descriptions': entry['descriptions']
+                    })
         
-        return processed_data if processed_data else [{
-            'company': '',
-            'job_title': '',
-            'date': '',
-            'descriptions': []
-        }]
+        return cleaned_data
 
     def is_relevant_description(self, text: str) -> bool:
         """Determine if a sentence is a relevant work experience description."""
-        action_verbs = {'developed', 'managed', 'led', 'designed', 'implemented', 'created', 'improved', 'optimized'}
-        return any(verb in text.lower() for verb in action_verbs)
+        # Extended list of action verbs commonly found in work descriptions
+        action_verbs = {
+            'developed', 'managed', 'led', 'designed', 'implemented', 'created', 'improved',
+            'optimized', 'coordinated', 'supervised', 'maintained', 'analyzed', 'established',
+            'launched', 'built', 'achieved', 'increased', 'reduced', 'streamlined', 'automated',
+            'collaborated', 'initiated', 'organized', 'planned', 'executed', 'delivered',
+            'supported', 'trained', 'mentored', 'researched', 'resolved', 'enhanced',
+            'generated', 'facilitated', 'monitored', 'evaluated', 'tested', 'deployed'
+        }
+        
+        # Technical terms that indicate work-related content
+        tech_terms = {
+            'project', 'system', 'software', 'application', 'database', 'platform',
+            'infrastructure', 'framework', 'api', 'service', 'solution', 'tool',
+            'technology', 'process', 'methodology', 'architecture', 'code', 'development'
+        }
+        
+        text_lower = text.lower()
+        
+        # Check for action verbs
+        has_action_verb = any(verb in text_lower for verb in action_verbs)
+        
+        # Check for technical terms
+        has_tech_term = any(term in text_lower for term in tech_terms)
+        
+        # Check for metrics or achievements
+        has_metrics = bool(re.search(r'\d+%|\d+\s*percent|\$\d+|\d+\s*users|\d+\s*clients', text_lower))
+        
+        # Check for project or team-related content
+        has_project_content = bool(re.search(r'team|client|stakeholder|project|product|deadline|milestone', text_lower))
+        
+        # Return True if the text contains meaningful work experience content
+        return (has_action_verb or has_metrics or 
+                (has_tech_term and has_project_content) or
+                (len(text.split()) > 5 and (has_tech_term or has_project_content)))
 
     def fallback_extract_descriptions(self, text: str) -> List[Dict]:
         """Fallback method to extract descriptions using a simpler heuristic approach."""

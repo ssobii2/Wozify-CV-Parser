@@ -210,13 +210,17 @@ class CVExtractor:
         try:
             language = detect(text)
             parsed_sections = self._get_parsed_sections(text)
+            
+            # Only pass the experience section if it exists
+            experience_sections = parsed_sections.get('experience') if parsed_sections else None
+            parsed_data = {'experience': experience_sections} if experience_sections else None
 
             if language == 'hu':
                 # Use Hungarian experience extractor
-                return self.experience_extractor_hu.extract_work_experience(text, parsed_sections)
+                return self.experience_extractor_hu.extract_work_experience(text, parsed_data)
             else:
                 # Use English experience extractor
-                return self.experience_extractor.extract_work_experience(text, parsed_sections)
+                return self.experience_extractor.extract_work_experience(text, parsed_data)
 
         except Exception as e:
             print(f"Error extracting work experience: {str(e)}")

@@ -4,6 +4,7 @@ import logging
 import re
 import spacy
 from pathlib import Path
+from langdetect import detect
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -21,6 +22,9 @@ class CVSectionParser:
             self.initialized = True
             # Initialize patterns
             self._init_patterns()
+            
+            # Store current text being processed
+            self.current_text = ""
             
             # Load the text classification model once during initialization
             try:
@@ -67,16 +71,20 @@ class CVSectionParser:
         
         # Common section headers in CVs
         self.section_headers = {
+            "summary": [
+                r"(?i)^(professional\s+summary|executive\s+summary|career\s+summary|summary\s+of\s+qualifications|szakmai\s+összefoglaló|szakmai\s+összefoglalás)$",
+                r"(?i)^(summary|career\s+objective|professional\s+objective|összefoglaló|szakmai\s+célkitűzés)$"
+            ],
             "profile": [
-                r"(?i)^(about\s*me|profile|summary|personal\s+information|introduction|objective|bemutatkozás|profil|összefoglalás|személyes\s+információk|bevezetés|célkitűzés)$",
-                r"(?i)^(professional\s+summary|personal\s+details|personal\s+profile|szakmai\s+összefoglalás|személyes\s+adatok|személyes\s+profil)$"
+                r"(?i)^(profile|about\s*me|personal\s+information|introduction|contact\s+information|profil|bemutatkozás|személyes\s+adatok|kapcsolat)$",
+                r"(?i)^(personal\s+details|personal\s+profile|contact|contact\s+details|személyes\s+profil|elérhetőségek)$"
             ],
             "education": [
                 r"(?i)^(education|academic|qualifications?|studies|oktatás|akadémiai|képesítések?|tanulmányok)$",
                 r"(?i)^(educational\s+background|academic\s+history|academic\s+qualifications?|oktatási\s+hátter|akadémiai\s+előzmények|akadémiai\s+képesítések?)$"
             ],
             "experience": [
-                r"(?i)^(experience|employment|work|career|professional\s+experience|tapasztalat|foglalkoztatós|munka|karrier|szakmai\s+tapasztalat)$",
+                r"(?i)^(experience|expertise|employment|work|career|professional\s+experience|tapasztalat|foglalkoztatós|munka|karrier|szakmai\s+tapasztalat)$",
                 r"(?i)^(work\s+history|employment\s+history|work\s+experience|professional\s+background|munkatörténet|foglalkoztatási\s+történet|munkatapasztalat|szakmai\s+hátter)$",
                 r"(?i)^(work\s+experience\s*/?\s*projects?|munkatapasztalat\s*/?\s*projektek?)$"
             ],
@@ -114,11 +122,46 @@ class CVSectionParser:
             "references": [
                 r"(?i)^(references?|recommendations?|referenciák?|ajánlások?)$",
                 r"(?i)^(professional\s+references?|szakmai\s+referenciák?)$"
-            ],
-            "summary": [
-                r"(?i)^(summary|professional\s+summary|career\s+summary|executive\s+summary|összefoglalás|szakmai\s+összefoglalás)$",
-                r"(?i)^(brief\s+summary|career\s+objective|professional\s+objective|szakmai\s+célkitűzés)$"
             ]
+        }
+
+        # Add section content indicators
+        self.section_content_indicators = {
+            "summary": {
+                "keywords": {
+                    "years of experience", "expertise in", "background in", "specialized in",
+                    "proven track record", "professional experience", "skilled in", "focus on",
+                    "év tapasztalat", "szakterület", "szakértelem", "specializáció"
+                },
+                "patterns": [
+                    r"(?i)(\d+\+?\s+years?\s+of\s+experience\s+in)",
+                    r"(?i)(proven\s+track\s+record\s+in)",
+                    r"(?i)(specialized\s+in\s+developing|expertise\s+in\s+developing)",
+                    r"(?i)(background\s+in\s+[a-z\s]+development)",
+                    r"(?i)(\d+\+?\s+év\s+tapasztalat)",
+                    r"(?i)(szakmai\s+tapasztalattal\s+rendelkezik)"
+                ],
+                "negative_patterns": [
+                    r"(?i)(@|tel:|phone:|mobile:|address:|email:)",
+                    r"(?i)(20\d{2}\s*[-–]\s*(20\d{2}|present|current))",
+                    r"(?i)(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s*\d{4}",
+                    r"(?i)(született|lakcím|telefonszám|születési)"
+                ]
+            },
+            "profile": {
+                "keywords": {
+                    "email", "phone", "address", "mobile", "linkedin", "github", "contact",
+                    "birth", "nationality", "gender", "marital", "driving license",
+                    "telefonszám", "lakcím", "születési", "állampolgárság", "jogosítvány"
+                },
+                "patterns": [
+                    r"(?i)([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})",
+                    r"(?i)(\+\d{1,2}[-\s]?\d{1,}[-\s]?\d{1,}[-\s]?\d{1,})",
+                    r"(?i)(linkedin\.com|github\.com)",
+                    r"(?i)(date\s+of\s+birth|driving\s+license|marital\s+status)",
+                    r"(?i)(születési\s+idő|jogosítvány|családi\s+állapot)"
+                ]
+            }
         }
 
     def _wait_for_model(self):
@@ -136,35 +179,39 @@ class CVSectionParser:
         for section, patterns in self.section_headers.items():
             for pattern in patterns:
                 if re.match(pattern, line):
+                    # Special handling for summary vs profile
+                    if section in ['summary', 'profile']:
+                        # Look ahead for content type if possible
+                        next_lines = self._get_next_content_lines(line, max_lines=3)
+                        if next_lines:
+                            detected_type = self._detect_section_content_type('\n'.join(next_lines))
+                            found_sections.add(detected_type)
+                            return detected_type
                     found_sections.add(section)
                     return section
-        
-        # If no exact match, try fuzzy matching based on keywords
-        line_lower = line.lower()
-        
-        # Define section keywords for fuzzy matching
-        section_keywords = {
-            "profile": {"profile", "about", "summary", "introduction", "objective"},
-            "education": {"education", "academic", "studies", "university", "school"},
-            "experience": {"experience", "work", "employment", "career", "professional"},
-            "languages": {"language", "linguistic", "fluent", "proficiency"},
-            "skills": {"skills", "technical", "technologies", "competencies", "expertise"},
-            "projects": {"projects", "portfolio", "works"},
-            "certifications": {"certifications", "certificates", "qualifications"},
-            "awards": {"awards", "honors", "achievements"},
-            "publications": {"publications", "research", "papers"},
-            "interests": {"interests", "hobbies", "activities"},
-            "references": {"references", "recommendations"}
-        }
-        
-        # Check each section's keywords
-        for section, keywords in section_keywords.items():
-            if any(keyword in line_lower for keyword in keywords):
-                if section not in found_sections:  # Prioritize unfound sections
-                    found_sections.add(section)
-                    return section
-        
+                    
         return None
+
+    def _get_next_content_lines(self, current_line: str, max_lines: int = 3) -> List[str]:
+        """Get the next few non-empty content lines after the current line."""
+        lines = []
+        current_idx = 0
+        text_lines = self.current_text.split('\n')
+        
+        # Find current line index
+        for i, line in enumerate(text_lines):
+            if line.strip() == current_line.strip():
+                current_idx = i
+                break
+                
+        # Get next content lines
+        for line in text_lines[current_idx + 1:]:
+            if line.strip() and not self._is_likely_new_section(line):
+                lines.append(line.strip())
+                if len(lines) >= max_lines:
+                    break
+                    
+        return lines
 
     def _is_likely_new_section(self, line: str) -> bool:
         """Enhanced check if a line is likely to be a new section header."""
@@ -208,7 +255,7 @@ class CVSectionParser:
                 'summary', 'profile', 'experience', 'education', 'skills',
                 'projects', 'achievements', 'certifications', 'publications',
                 'awards', 'interests', 'references', 'contact', 'personal',
-                'work', 'employment', 'qualification', 'objective', 'about',
+                'work', 'employment', 'qualification', 'objective', 'about', 'work experience',
                 'languages', 'expertise', 'professional'
             }
             
@@ -311,6 +358,9 @@ class CVSectionParser:
         """Parse a CV text into different sections with improved splitting logic."""
         logger.info("Starting CV parsing...")
 
+        # Store current text being processed
+        self.current_text = text
+
         # Preprocess text
         text = self._preprocess_text(text)
         
@@ -383,7 +433,11 @@ class CVSectionParser:
                     if buffer:
                         content = self._clean_content('\n'.join(buffer))
                         if content:
-                            if self._contains_language_info(content):
+                            if current_section in ['summary', 'profile']:
+                                detected_type = self._detect_section_content_type(content)
+                                sections[detected_type].append(content)
+                                found_sections.add(detected_type)
+                            elif self._contains_language_info(content):
                                 language_content, remaining_content = self._extract_language_content(content)
                                 if language_content:
                                     sections['languages'].append(language_content)
@@ -396,23 +450,13 @@ class CVSectionParser:
                     if line:
                         buffer.append(line)
             elif line:
-                # If no section identified yet, classify between summary and profile
-                if self.nlp and current_section in ['summary', 'profile', 'education', 'experience', 'skills']:
-                    doc = self.nlp(line)
-                    scores = doc.cats
-                    if scores.get('summary', 0) > 0.6:
-                        if not found_sections.intersection({'summary', 'profile'}):
-                            current_section = 'summary'
-                            found_sections.add('summary')
-                    else:
-                        if 'summary' not in found_sections:
-                            current_section = 'profile'
-                            found_sections.add('profile')
-                else:
-                    if not found_sections.intersection({'summary', 'profile'}):
-                        current_section = 'profile'
-                        found_sections.add('profile')
-                buffer.append(line)
+                # If no section identified yet, detect if it's summary or profile
+                content = line.strip()
+                if content:
+                    detected_type = self._detect_section_content_type(content)
+                    current_section = detected_type
+                    found_sections.add(detected_type)
+                    buffer.append(line)
 
             current_idx += 1
 
@@ -497,14 +541,18 @@ class CVSectionParser:
         )
 
     def _detect_language(self, text: str) -> str:
-        """Simple language detection based on presence of Hungarian keywords."""
-        hungarian_keywords = [
-            'magyar', 'nyelv', 'folyékony', 'haladó', 'középszint', 'alapszint'
-        ]
-        text_lower = text.lower()
-        if any(keyword in text_lower for keyword in hungarian_keywords):
-            return 'hungarian'
-        return 'english'
+        """Language detection using langdetect."""
+        try:
+            return detect(text)
+        except:
+            # Fallback to checking Hungarian keywords if langdetect fails
+            hungarian_keywords = [
+                'magyar', 'nyelv', 'folyékony', 'haladó', 'középszint', 'alapszint'
+            ]
+            text_lower = text.lower()
+            if any(keyword in text_lower for keyword in hungarian_keywords):
+                return 'hu'
+            return 'en'
 
     def _get_model_and_tokenizer(self, language: str):
         """Return the appropriate model and tokenizer based on the language."""
@@ -541,3 +589,38 @@ class CVSectionParser:
             return True
         
         return False
+
+    def _detect_section_content_type(self, text: str) -> str:
+        """Determine if content is more likely to be summary or profile based on content analysis."""
+        text_lower = text.lower()
+        
+        # Check for negative patterns first
+        if any(re.search(pattern, text) for pattern in self.section_content_indicators["summary"]["negative_patterns"]):
+            return "profile"
+            
+        # Count indicators for each section type
+        summary_score = 0
+        profile_score = 0
+        
+        # Check keywords
+        summary_score += sum(1 for word in self.section_content_indicators["summary"]["keywords"] 
+                           if word in text_lower) * 2  # Give more weight to summary keywords
+        profile_score += sum(1 for word in self.section_content_indicators["profile"]["keywords"] 
+                           if word in text_lower) * 1.5
+        
+        # Check patterns
+        summary_score += sum(1 for pattern in self.section_content_indicators["summary"]["patterns"] 
+                           if re.search(pattern, text)) * 2
+        profile_score += sum(1 for pattern in self.section_content_indicators["profile"]["patterns"] 
+                           if re.search(pattern, text)) * 2
+        
+        # Additional heuristics
+        if len(text.split()) > 30 and not any(re.search(pattern, text) 
+            for pattern in self.section_content_indicators["summary"]["negative_patterns"]):
+            summary_score += 3  # Stronger bias for longer paragraphs without contact info
+            
+        # Check for experience-like content that should not be in summary
+        if any(re.search(pattern, text) for pattern in self.experience_indicators):
+            summary_score -= 2
+            
+        return "summary" if summary_score > profile_score else "profile"
