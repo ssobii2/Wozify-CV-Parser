@@ -8,19 +8,44 @@ class EducationExtractor:
         # Constants for English
         self.SCHOOLS = [
             'College', 'University', 'Institute', 'School', 'Academy', 'BASIS', 'Magnet',
-            'Polytechnic', 'Seminary', 'Conservatory'
+            'Polytechnic', 'Seminary', 'Conservatory', 'Community College', 'Technical College',
+            'Vocational School', 'Graduate School', 'Postgraduate Institute', 'Online University',
+            'Distance Learning Institute', 'Adult Education Center', 'Training Institute',
+            'Career College', 'Specialized School', 'Art School', 'Music School', 'Language School',
+            'Nursing School', 'Business School', 'Law School', 'Medical School', 'Engineering School',
+            'Science Institute', 'Research Institute', 'Fashion School', 'Culinary School',
+            'Design School', 'Film School', 'Theater School', 'Sports Academy', 'Military Academy',
+            'Flight School', 'Beauty School', 'Cosmetology School', 'Massage Therapy School',
+            'Pharmacy School', 'Dental School', 'Optometry School', 'Public Health School',
+            'Environmental School', 'Information Technology School', 'Cybersecurity School',
+            'Data Science Institute', 'Artificial Intelligence Institute', 'Blockchain Academy'
         ]
         
         self.DEGREES = [
             'Associate', 'Bachelor', 'Master', 'PhD', 'Ph.D', 'BSc', 'BA', 'MS', 'MSc', 'MBA',
             'Diploma', 'Engineer', 'Technician', 'BEng', 'MEng', 'BBA', 'DBA', 'MD', 'JD',
-            'LLB', 'LLM', 'EdD', 'DPhil', 'MPhil', 'MAcc', 'MFA', 'BFA'
+            'LLB', 'LLM', 'EdD', 'DPhil', 'MPhil', 'MAcc', 'MFA', 'BFA',
+            'Certificate', 'Advanced Diploma', 'Higher National Diploma', 'Foundation Degree',
+            'Postgraduate Certificate', 'Postgraduate Diploma', 'Doctor of Education', 'Doctor of Philosophy',
+            'Master of Arts', 'Master of Science', 'Master of Business Administration', 'Bachelor of Arts',
+            'Bachelor of Science', 'Bachelor of Engineering', 'Bachelor of Fine Arts', 'Bachelor of Music',
+            'Master of Fine Arts', 'Master of Public Administration', 'Master of Public Health', 'Master of Social Work',
+            'Master of Education', 'Master of Architecture', 'Master of Laws', 'Master of International Business',
+            'Doctor of Medicine', 'Doctor of Jurisprudence', 'Doctor of Nursing Practice', 'Doctor of Pharmacy',
+            'Doctor of Veterinary Medicine', 'Doctor of Optometry', 'Doctor of Dental Surgery', 'Doctor of Physical Therapy'
         ]
         
         self.HONORS = [
             'summa cum laude', 'magna cum laude', 'cum laude', 'with honors', 'with distinction',
             'first class', 'second class', 'merit', 'distinction', 'dean\'s list', 'highest honors',
-            'high honors', 'honors'
+            'high honors', 'honors', 'honors graduate', 'graduated with honors', 'top of the class',
+            'valedictorian', 'president\'s list', 'chancellor\'s list', 'academic excellence',
+            'academic achievement', 'outstanding achievement', 'recognition of excellence',
+            'scholar', 'honor roll', 'exemplary performance', 'distinguished scholar', 
+            'academic distinction', 'summa cum laude graduate', 'magna cum laude graduate',
+            'cum laude graduate', 'with high honors', 'with great distinction', 'with special honors',
+            'with commendation', 'with accolades', 'top honors', 'honorary mention', 'academic merit',
+            'recognized for excellence', 'notable achievement', 'academic honors', 'scholastic honors'
         ]
         
         self.section_headers = {
@@ -28,14 +53,21 @@ class EducationExtractor:
                 'education', 'academic background', 'qualifications', 'academic qualifications',
                 'educational background', 'education and training', 'academic history',
                 'education details', 'academic details', 'education & qualifications',
-                'academic profile', 'studies'
+                'academic profile', 'studies', 'learning', 'training history', 'schooling',
+                'coursework', 'degree information', 'educational qualifications', 'certifications',
+                'academic achievements', 'professional development', 'educational experience'
             ]
         }
 
         self.education_keywords = [
             'university', 'college', 'institute', 'school', 'academy', 'degree', 'bachelor', 
             'master', 'phd', 'gpa', 'coursework', 'course', 'program', 'diploma', 
-            'certification', 'training'
+            'certification', 'training', 'higher education', 'vocational training', 
+            'associate degree', 'graduate degree', 'postgraduate degree', 'online course', 
+            'distance learning', 'certificate program', 'professional development', 
+            'academic program', 'educational institution', 'learning experience', 
+            'curriculum', 'academic achievement', 'scholarship', 'internship', 
+            'apprenticeship', 'continuing education', 'adult education'
         ]
 
         self.date_patterns = [
@@ -251,6 +283,11 @@ class EducationExtractor:
         # Remove common prefixes that might appear
         text = re.sub(r'^[-•*]\s*', '', text.strip())
         
+        # Remove date patterns from the start
+        text = re.sub(r'^\d{4}\s*[-–]\s*\d{4}:\s*', '', text)
+        text = re.sub(r'^\d{4}\s*[-–]\s*(?:Present|Current|Now):\s*', '', text)
+        text = re.sub(r'^\d{4}:\s*', '', text)
+        
         # Try to extract GPA if present
         gpa = ''
         gpa_match = re.search(r'(?:GPA|Grade|CGPA):\s*([\d\.]+)\s*(?:/\s*[\d\.]+)?', text, re.IGNORECASE)
@@ -258,42 +295,41 @@ class EducationExtractor:
             gpa = gpa_match.group(1)
             text = text.replace(gpa_match.group(0), '').strip()
         
-        # First try to find common degree patterns
-        degree_patterns = [
-            r'(Bachelor\s+of\s+[^,]+)',
-            r'(Master\s+of\s+[^,]+)',
-            r'(Ph\.?D\.?\s+[^,]*)',
-            r'(B\.?S\.?|M\.?S\.?|B\.?A\.?|M\.?A\.?|Ph\.?D\.?)\s+in\s+([^,]+)',
-            r'(BSc|MSc|MBA|BA|MA)\s+in\s+([^,]+)'
+        # Split on common degree indicators
+        degree_indicators = [
+            r'\s*-\s*(?=Doctor|Ph\.?D|Master|Bachelor|BSc|MSc|MBA|BA|MA)',
+            r'\s*,\s*(?=Doctor|Ph\.?D|Master|Bachelor|BSc|MSc|MBA|BA|MA)',
+            r'\s+(?=Doctor|Ph\.?D|Master|Bachelor|BSc|MSc|MBA|BA|MA)'
         ]
         
-        degree = ''
-        remaining_text = text
-        for pattern in degree_patterns:
-            match = re.search(pattern, text, re.IGNORECASE)
-            if match:
-                degree = match.group(0)
-                remaining_text = text.replace(degree, '').strip(' ,')
+        parts = text
+        for indicator in degree_indicators:
+            parts = re.split(indicator, text, maxsplit=1)
+            if len(parts) > 1:
                 break
         
-        # If we found a degree, the remaining text is likely the school
-        if degree:
-            school_name = remaining_text
-        else:
-            # Otherwise, try to split by common separators
-            parts = re.split(r'\s*(?:[-–|,]|\bin\b)\s*', text, maxsplit=1)
+        if len(parts) > 1:
             school_name = parts[0].strip()
-            if len(parts) > 1:
-                degree = parts[1].strip()
+            degree = parts[1].strip()
+        else:
+            # If no clear split found, try to identify if the text is more likely a school or degree
+            if any(keyword in text.lower() for keyword in ['university', 'college', 'institute', 'school']):
+                school_name = text
+                degree = ''
+            else:
+                school_name = ''
+                degree = text
         
         # Clean up school name
-        school_name = re.sub(r'\s*\([^)]*\)', '', school_name).strip()  # Remove parenthetical info
-        school_name = re.sub(r'\s+,.*$', '', school_name).strip()  # Remove location after comma
+        school_name = re.sub(r'\s*\([^)]*\)', '', school_name)  # Remove parenthetical info
+        school_name = re.sub(r'\s+,.*$', '', school_name)       # Remove location after comma
+        school_name = school_name.strip(' -,')                  # Remove trailing separators
         
         # Clean up degree
         if degree:
-            degree = re.sub(r'\s*\(\s*\)', '', degree).strip()  # Remove empty parentheses
-            degree = re.sub(r'\s*\([^)]*\)', '', degree).strip()  # Remove parenthetical info
+            degree = re.sub(r'\s*\(\s*\)', '', degree)         # Remove empty parentheses
+            degree = re.sub(r'\s*\([^)]*\)', '', degree)       # Remove parenthetical info
+            degree = degree.strip(' -,')                        # Remove trailing separators
         
         return school_name, degree, gpa
 
@@ -313,8 +349,11 @@ class EducationExtractor:
 
     def _clean_degree(self, text: str) -> str:
         """Clean and normalize degree information."""
-        # Remove common prefixes
+        # Remove common prefixes and dates
         text = re.sub(r'^[-•*]\s*', '', text.strip())
+        text = re.sub(r'^\d{4}\s*[-–]\s*\d{4}:\s*', '', text)
+        text = re.sub(r'^\d{4}\s*[-–]\s*(?:Present|Current|Now):\s*', '', text)
+        text = re.sub(r'^\d{4}:\s*', '', text)
         
         # Remove any coursework-related information
         text = re.sub(r'(?i)relevant\s+coursework:.*$', '', text)
@@ -323,7 +362,13 @@ class EducationExtractor:
         # Remove GPA information if present
         text = re.sub(r'(?i)(?:GPA|Grade):\s*[\d\.]+\s*(?:/\s*[\d\.]+)?', '', text)
         
-        return text.strip()
+        # Clean up common formatting issues
+        text = re.sub(r'\s+', ' ', text)                    # Normalize whitespace
+        text = re.sub(r'\s*,\s*$', '', text)               # Remove trailing comma
+        text = re.sub(r'\s*-\s*$', '', text)               # Remove trailing dash
+        text = text.strip()
+        
+        return text
 
     def _is_coursework(self, text: str) -> bool:
         """Check if the text is likely to be coursework information."""
@@ -363,18 +408,15 @@ class EducationExtractor:
         """Validate if the section data is meaningful and contains education information."""
         if not section_lines:
             return False
-            
-        # Check if we have more than just section headers
-        if len(section_lines) <= 1:
-            return False
-            
+        
         # Check if any line contains education-related keywords
         education_indicators = [
             r'\b(?:University|College|Institute|School|Academy)\b',
             r'\b(?:Bachelor|Master|PhD|BSc|MSc|BA|MA|MBA|BBA)\b',
             r'\b(?:Degree|Diploma|Certificate)\b',
             r'\b(?:Major|Minor|Specialization)\b',
-            r'\b(?:Education|Study|Studies)\b'
+            r'\b(?:Education|Study|Studies)\b',
+            r'(?:Computer Science|Engineering|Informatics)\b'  # Added common fields
         ]
         
         has_education_content = False
@@ -395,7 +437,17 @@ class EducationExtractor:
         used_fallback = False
         
         if parsed_sections and 'education' in parsed_sections:
+            # Only use lines from the education section, don't mix with other text
             section_lines = [line.strip() for line in parsed_sections['education'] if line.strip()]
+            # Filter out lines that look like they belong to other sections
+            section_lines = [
+                line for line in section_lines 
+                if not any(keyword in line.lower() for keyword in [
+                    'experience:', 'skills:', 'languages:', 'projects:', 
+                    'certifications:', 'awards:', 'publications:', 'interests:',
+                    'references:', 'profile:', 'summary:'
+                ])
+            ]
             if self._validate_section_data(section_lines):
                 education_lines = section_lines
                 print(f"Found {len(education_lines)} valid lines in parsed education section")
@@ -403,8 +455,8 @@ class EducationExtractor:
                 print("Parsed section data invalid or insufficient, using fallback")
                 used_fallback = True
         
-        # If no valid education lines found, try fallback extraction
-        if not education_lines or used_fallback:
+        # Only use fallback if no parsed sections provided
+        if (not parsed_sections or not 'education' in parsed_sections) and (not education_lines or used_fallback):
             # Look for education section using various patterns
             education_patterns = [
                 r'(?:EDUCATION|ACADEMIC|QUALIFICATION)S?(?:\s+(?:&|AND)\s+TRAINING)?',
@@ -419,6 +471,14 @@ class EducationExtractor:
                     education_lines.extend([line.strip() for line in section_text if line.strip()])
             
             print(f"Extracted {len(education_lines)} lines using fallback method")
+
+        # Only use full text scan if no education section found and no parsed sections provided
+        if not education_lines and not parsed_sections:
+            text_lines = text.split('\n')
+            for line in text_lines:
+                if any(keyword in line.lower() for keyword in ['university', 'college', 'bachelor', 'master', 'phd', 'degree', 'diploma']):
+                    if not any(keyword in line.lower() for keyword in ['experience', 'skill', 'project']):
+                        education_lines.append(line.strip())
 
         if education_lines:
             for line in education_lines:
@@ -504,21 +564,19 @@ class EducationExtractor:
             if entry.get('school') and any(keyword in entry['school'].lower() for keyword in ['html', 'css', 'javascript', 'sql', 'windows', 'linux', 'http']):
                 continue
             
-            # Clean up entries
-            if entry.get('degree') and self._is_coursework(entry['degree']):
-                entry['descriptions'].insert(0, entry['degree'])
-                entry['degree'] = ''
+            # Additional validation for empty entries
+            if not entry.get('school') and not entry.get('degree'):
+                continue
             
-            # Try to extract GPA from descriptions if not found
-            if not entry.get('gpa'):
-                for desc in entry.get('descriptions', []):
-                    gpa = self._extract_gpa_from_description(desc)
-                    if gpa:
-                        entry['gpa'] = gpa
+            # Try to extract meaningful info from descriptions if school/degree empty
+            if not entry.get('school') and not entry.get('degree') and entry.get('descriptions'):
+                for desc in entry['descriptions']:
+                    if any(keyword in desc.lower() for keyword in ['university', 'college', 'institute', 'school']):
+                        parts = desc.split(',', 1)
+                        entry['school'] = parts[0].strip()
+                        if len(parts) > 1:
+                            entry['degree'] = parts[1].strip()
                         break
-            
-            # Remove duplicate descriptions
-            entry['descriptions'] = self._clean_descriptions(entry.get('descriptions', []))
             
             # Only add entries that have either school or degree information
             if entry.get('school') or entry.get('degree'):
@@ -551,3 +609,62 @@ class EducationExtractor:
                     honors.append(honor.title())
         
         return honors
+
+    def _standardize_date(self, date_str: str) -> str:
+        """Standardize date format to DD/MM/YYYY."""
+        # Handle month names
+        month_map = {
+            'january': '01', 'february': '02', 'march': '03', 'april': '04',
+            'may': '05', 'june': '06', 'july': '07', 'august': '08',
+            'september': '09', 'october': '10', 'november': '11', 'december': '12',
+            'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04', 'jun': '06',
+            'jul': '07', 'aug': '08', 'sep': '09', 'oct': '10', 'nov': '11',
+            'dec': '12'
+        }
+        
+        # Handle seasons
+        season_map = {
+            'spring': '03',
+            'summer': '06',
+            'fall': '09',
+            'autumn': '09',
+            'winter': '12'
+        }
+        
+        date_str = date_str.lower().strip()
+        
+        # Handle "Present" or "Current"
+        if any(word in date_str.lower() for word in ['present', 'current', 'now']):
+            from datetime import datetime
+            today = datetime.now()
+            return f"{today.day:02d}/{today.month:02d}/{today.year}"
+        
+        # Extract year
+        year_match = re.search(r'\d{4}', date_str)
+        if not year_match:
+            return date_str  # Return original if no year found
+        
+        year = year_match.group()
+        
+        # Handle seasons
+        for season, month in season_map.items():
+            if season in date_str:
+                return f"01/{month}/{year}"
+
+        # Handle month names
+        for month_name, month_num in month_map.items():
+            if month_name in date_str:
+                # Try to extract day
+                day_match = re.search(r'\b(\d{1,2})\b', date_str)
+                day = day_match.group() if day_match else '01'
+                return f"{int(day):02d}/{month_num}/{year}"
+        
+        # Handle numeric formats
+        numeric_match = re.search(r'(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})', date_str)
+        if numeric_match:
+            day, month, year = numeric_match.groups()
+            # Assume DD/MM/YYYY format (European)
+            return f"{int(day):02d}/{int(month):02d}/{year}"
+        
+        # If only year is found, use January 1st
+        return f"01/01/{year}"
