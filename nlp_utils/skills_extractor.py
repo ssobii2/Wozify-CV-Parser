@@ -13,7 +13,11 @@ class SkillsExtractor:
                 'készségek', 'technikai készségek', 'szakmai készségek', 'kompetenciák',
                 'szaktudás', 'technológiák', 'technikai ismeretek', 'szakmai ismeretek',
                 'programozási ismeretek', 'fejlesztői ismeretek', 'egyéb tanusítványok', 'egyéb',
-                'programozói skillek', 'szakértelem'
+                'programozói skillek', 'szakértelem', 'szakmai tapasztalat', 'szakmai tudás',
+                'szakmai kompetenciák', 'technikai tudás', 'technikai kompetenciák', 
+                'szakmai ismeretek és készségek', 'szakmai fejlődés', 'szakmai képesítések',
+                'szakmai tapasztalatok', 'szakmai gyakorlat', 'szakmai elismerések', 
+                'szakmai tanúsítványok', 'szakmai képességek', 'szakmai irányelvek'
             ]
         }
         
@@ -30,7 +34,20 @@ class SkillsExtractor:
             'git', 'jira', 'confluence', 'slack', 'vscode', 'intellij', 'eclipse',
             'postman', 'webpack', 'npm', 'yarn', 'html5', '.net', 'ios', 'android',
             'google', 'ui/ux', 'adobe', 'figma', 'prisma', 'web3', 'express', 'linux',
-            'macos', 'windows', 'laravel'
+            'macos', 'windows', 'laravel',
+            # Additional skills
+            'data analysis', 'machine learning', 'artificial intelligence', 'big data',
+            'data visualization', 'business intelligence', 'cybersecurity', 'networking',
+            'devops', 'agile', 'scrum', 'kanban', 'project management', 'quality assurance',
+            'testing', 'unit testing', 'integration testing', 'selenium', 'cucumber',
+            'graphql', 'restful services', 'microservices', 'api development', 'cloud computing',
+            'virtualization', 'kvm', 'vmware', 'git', 'svn', 'mercurial', 'docker-compose',
+            'firebase', 'heroku', 'netlify', 'digital ocean', 'content management systems',
+            'wordpress', 'shopify', 'magento', 'seo', 'sem', 'email marketing', 'social media',
+            'ux research', 'prototyping', 'wireframing', 'user testing', 'agile methodologies',
+            'business analysis', 'stakeholder management', 'change management', 'strategic planning',
+            'financial analysis', 'marketing', 'salesforce', 'crm', 'erp', 'sap', 'oracle netsuite',
+            'hungarian', 'angol', 'német', 'francia', 'spanyol', 'olasz', 'portugál', 'orosz'
         ]
 
     def get_nlp_model_for_text(self, text: str):
@@ -82,10 +99,122 @@ class SkillsExtractor:
         """Extract skills from text using both predefined lists and NLP analysis."""
         skills = set()
         
+        def normalize_skill(skill: str) -> str:
+            """Normalize skill names to prevent duplicates."""
+            skill = skill.lower()
+            # Remove .js suffix if present
+            if skill.endswith('.js'):
+                skill = skill[:-3]
+            # Remove js suffix if present
+            if skill.endswith('js') and not skill == 'js':
+                skill = skill[:-2]
+            # Handle special cases
+            skill_mapping = {
+                # JavaScript frameworks/libraries
+                'node': 'Node.js',
+                'nodejs': 'Node.js',
+                'express': 'Express.js',
+                'expressjs': 'Express.js',
+                'react': 'React.js',
+                'reactjs': 'React.js',
+                'next': 'Next.js',
+                'nextjs': 'Next.js',
+                'vue': 'Vue.js',
+                'vuejs': 'Vue.js',
+                'angular': 'Angular.js',
+                'angularjs': 'Angular.js',
+                'svelte': 'Svelte',
+                'sveltejs': 'Svelte',
+                
+                # Programming languages
+                'javascript': 'JavaScript',
+                'typescript': 'TypeScript',
+                'python': 'Python',
+                'java': 'Java',
+                'c++': 'C++',
+                'cpp': 'C++',
+                'c#': 'C#',
+                'csharp': 'C#',
+                'php': 'PHP',
+                'ruby': 'Ruby',
+                'swift': 'Swift',
+                'go': 'Go',
+                
+                # Databases
+                'postgresql': 'PostgreSQL',
+                'postgres': 'PostgreSQL',
+                'mysql': 'MySQL',
+                'mongodb': 'MongoDB',
+                'mongo': 'MongoDB',
+                'sqlite': 'SQLite',
+                'cassandra': 'Cassandra',
+                
+                # Web technologies
+                'html': 'HTML',
+                'html5': 'HTML',
+                'css': 'CSS',
+                'css3': 'CSS',
+                'sass': 'SASS',
+                'scss': 'SASS',
+                'tailwind': 'Tailwind CSS',
+                'tailwindcss': 'Tailwind CSS',
+                'bootstrap': 'Bootstrap',
+                'jquery': 'jQuery',
+                
+                # Tools and platforms
+                'git': 'Git',
+                'github': 'GitHub',
+                'gitlab': 'GitLab',
+                'docker': 'Docker',
+                'kubernetes': 'Kubernetes',
+                'k8s': 'Kubernetes',
+                'aws': 'AWS',
+                'azure': 'Azure',
+                'gcp': 'GCP',
+                'vscode': 'VS Code',
+                'visualstudio': 'Visual Studio',
+                'heroku': 'Heroku',
+                'netlify': 'Netlify',
+                
+                # Design tools
+                'figma': 'Figma',
+                'adobe': 'Adobe',
+                'photoshop': 'Adobe Photoshop',
+                'illustrator': 'Adobe Illustrator',
+                'xd': 'Adobe XD',
+                
+                # Microsoft tools
+                'excel': 'Microsoft Excel',
+                'word': 'Microsoft Word',
+                'powerpoint': 'Microsoft PowerPoint',
+                'msoffice': 'Microsoft Office',
+                'office': 'Microsoft Office',
+                
+                # Operating systems
+                'linux': 'Linux',
+                'windows': 'Windows',
+                'macos': 'macOS',
+                'mac': 'macOS',
+                'ubuntu': 'Ubuntu',
+                'debian': 'Debian',
+            }
+            
+            # Try to get from mapping, fallback to capitalized version
+            normalized = skill_mapping.get(skill)
+            if normalized:
+                return normalized
+            
+            # Handle remaining cases
+            words = skill.split()
+            return ' '.join(word.capitalize() for word in words)
+
         # Try to use parsed sections first if available
-        if parsed_sections and parsed_sections.get('skills'):
-            skills_text = ' '.join(parsed_sections['skills'])
-            if skills_text.strip():
+        if parsed_sections and 'skills' in parsed_sections and parsed_sections['skills']:
+            print("Using parsed skills section")
+            for skills_text in parsed_sections['skills']:
+                if not skills_text.strip():
+                    continue
+                    
                 # First get skills from predefined list
                 for skill in self.skills:
                     # Create variations of the skill name to match common formats
@@ -101,7 +230,8 @@ class SkillsExtractor:
                     
                     for variation in skill_variations:
                         if re.search(r'\b' + re.escape(variation) + r'\b', skills_text, re.IGNORECASE):
-                            skills.add(skill.capitalize())
+                            normalized_skill = normalize_skill(skill)
+                            skills.add(normalized_skill)
                             break
                 
                 # Then use NLP to find additional technical skills
@@ -110,13 +240,11 @@ class SkillsExtractor:
                 
                 # Look for noun phrases that might be technical skills
                 if nlp.meta['lang'] == 'hu':
-                    # Custom extraction for Hungarian
                     noun_phrases = self.extract_noun_phrases(doc)
                 else:
                     noun_phrases = doc.noun_chunks
 
                 for chunk in noun_phrases:
-                    # Clean and normalize the potential skill
                     potential_skill = chunk.text.strip()
                     
                     # Skip if too long or too short
@@ -129,20 +257,19 @@ class SkillsExtractor:
                     
                     # Look for technical skill patterns
                     if self._is_likely_technical_skill(potential_skill):
-                        skills.add(potential_skill.capitalize())
-                
-                # If we found skills in the parsed section, return them
-                if skills:
-                    return sorted(skills)
+                        normalized_skill = normalize_skill(potential_skill)
+                        skills.add(normalized_skill)
         
-        # Only fallback if no skills found in parsed sections
+        # Only fallback to full text extraction if no skills found in parsed sections
         if not skills:
+            print("Using fallback skill extraction")
             section_lines = self.extract_section(text, self.section_headers['skills'])
             if section_lines:
                 section_text = ' '.join(section_lines)
                 for skill in self.skills:
                     if re.search(r'\b' + re.escape(skill) + r'\b', section_text, re.IGNORECASE):
-                        skills.add(skill.capitalize())
+                        normalized_skill = normalize_skill(skill)
+                        skills.add(normalized_skill)
         
         return sorted(skills)
 
@@ -166,11 +293,19 @@ class SkillsExtractor:
             r'\b[A-Za-z]+[-\.][A-Za-z]+\b',  # Hyphenated or dotted
         ]
         
-        # Skip common English words and general terms
+        # Skip common English and Hungarian words and general terms that do not indicate specific skills or expertise
         common_words = {
             'the', 'and', 'or', 'in', 'at', 'by', 'for', 'with', 'about',
             'skills', 'years', 'experience', 'knowledge', 'advanced', 'intermediate',
-            'basic', 'expert', 'proficient', 'familiar', 'understanding'
+            'basic', 'expert', 'proficient', 'familiar', 'understanding',
+            'capable', 'competent', 'trained', 'qualified', 'specialized', 'mastery',
+            'apprentice', 'novice', 'talented', 'gifted', 'adept', 'skilled', 'expertise',
+            'proficiency', 'ability', 'aptitude', 'know-how', 'experience level', 'background',
+            'készségek', 'évek', 'tapasztalat', 'tudás', 'haladó', 'középfokú',
+            'alapfokú', 'szakértő', 'jártasság', 'ismerős', 'megértés',
+            'képes', 'kompetens', 'képzett', 'minősített', 'specializált', 'szakértelem',
+            'mesteri', 'tanonc', 'kezdő', 'tehetséges', 'tehetséges', 'ügyes', 'szakértelem',
+            'szakmai tudás', 'képesség', 'alkalmasság', 'tudás', 'tapasztalati szint', 'háttér'
         }
         
         text_lower = text.lower()
@@ -183,10 +318,12 @@ class SkillsExtractor:
         if any(re.search(pattern, text) for pattern in tech_patterns):
             return True
         
-        # Check for technical context
+        # Check for technical context in both English and Hungarian
         technical_context = {
             'framework', 'library', 'language', 'database', 'platform',
-            'tool', 'sdk', 'api', 'stack', 'protocol', 'service'
+            'tool', 'sdk', 'api', 'stack', 'protocol', 'service',
+            'keretrendszer', 'könyvtár', 'nyelv', 'adatbázis', 'platform',
+            'eszköz', 'sdk', 'api', 'stack', 'protokoll', 'szolgáltatás'
         }
         
         return any(context in text_lower for context in technical_context)
@@ -239,7 +376,6 @@ class SkillsExtractor:
             'Elasticsearch': 'Elasticsearch',
             'Cassandra': 'Cassandra',
             'DynamoDB': 'DynamoDB',
-            'IOS': 'iOS',
             'iOS': 'iOS',
             'Android': 'Android',
             'Google': 'Google',
@@ -250,8 +386,41 @@ class SkillsExtractor:
             'Linux': 'Linux',
             'Windows': 'Windows',
             'MacOS': 'Mac OS',
-            'Mac OS': 'Mac OS',
             'Laravel': 'Laravel',
             'Web3': 'Web3',
             'Web 3': 'Web3',
+            'SASS': 'SASS',
+            'SCSS': 'SASS',
+            'Firebase': 'Firebase',
+            'Heroku': 'Heroku',
+            'Netlify': 'Netlify',
+            'DigitalOcean': 'Digital Ocean',
+            'Content Management Systems': 'CMS',
+            'WordPress': 'WordPress',
+            'Shopify': 'Shopify',
+            'Magento': 'Magento',
+            'SEO': 'SEO',
+            'SEM': 'SEM',
+            'Email Marketing': 'Email Marketing',
+            'Social Media': 'Social Media',
+            'Agile': 'Agile',
+            'Scrum': 'Scrum',
+            'Kanban': 'Kanban',
+            'DevOps': 'DevOps',
+            'Machine Learning': 'ML',
+            'Artificial Intelligence': 'AI',
+            'Data Analysis': 'Data Analysis',
+            'Business Intelligence': 'BI',
+            'Cybersecurity': 'Cybersecurity',
+            'Networking': 'Networking',
+            'Virtualization': 'Virtualization',
+            'Cloud Computing': 'Cloud Computing',
+            'API Development': 'API Dev',
+            'Microservices': 'Microservices',
+            'GraphQL': 'GraphQL',
+            'RESTful Services': 'REST',
+            'Unit Testing': 'Unit Testing',
+            'Integration Testing': 'Integration Testing',
+            'Selenium': 'Selenium',
+            'Cucumber': 'Cucumber',
         }
