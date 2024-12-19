@@ -8,10 +8,13 @@ class LanguageExtractor:
         self.nlp_en = nlp_en
         self.nlp_hu = nlp_hu
         self.section_headers = {
-            'languages': ['language', 'languages', 'language skills', 'nyelv', 'nyelvek', 'nyelvtudás']
+            'languages': [
+                'language', 'languages', 'language skills', 'nyelv', 'nyelvek', 'nyelvtudás',
+                'linguistic skills', 'linguistics', 'foreign languages', 'nyelvi készségek', 
+                'idegen nyelvek', 'nyelvtudás szintje', 'nyelvi ismeretek', 'nyelvi kompetenciák'
+            ]
         }
         
-        # Add a list of known languages to filter results, including Hungarian translations
         self.known_languages = {
             'english': 'angol',
             'hungarian': 'magyar',
@@ -25,6 +28,8 @@ class LanguageExtractor:
             'korean': 'koreai',
             'arabic': 'arab',
             'hindi': 'hindi',
+            'urdu': 'urdu',
+            'punjabi': 'pandzsábi',
             'portuguese': 'portugál',
             'dutch': 'holland',
             'polish': 'lengyel',
@@ -42,7 +47,18 @@ class LanguageExtractor:
             'swedish': 'svéd',
             'norwegian': 'norvég',
             'danish': 'dán',
-            'finnish': 'finn'
+            'finnish': 'finn',
+            'slovenian': 'szlovén',
+            'estonian': 'észt',
+            'latvian': 'lett',
+            'lithuanian': 'litván',
+            'icelandic': 'izlandi',
+            'maltese': 'máltai',
+            'basque': 'baszk',
+            'galician': 'galíciai',
+            'welsh': 'walesi',
+            'irish': 'ír',
+            'scottish': 'skót'
         }
         
         # Add common proficiency levels
@@ -51,9 +67,14 @@ class LanguageExtractor:
             'professional', 'business', 'conversational', 'elementary',
             'mother tongue', 'proficient', 'excellent', 'good', 'fair', 'poor',
             'c1', 'c2', 'b1', 'b2', 'a1', 'a2',
+            # Additional common proficiency levels
+            'competent', 'capable', 'skilled', 'trained', 'qualified', 'experienced',
+            'satisfactory', 'sufficient', 'limited', 'functional', 'basic communication',
             # Hungarian proficiency levels
             'anyanyelvi', 'folyékony', 'haladó', 'középhaladó', 'alapfokú', 'kezdő',
-            'szakmai', 'üzleti', 'társalgási', 'alapfok', 'anyanyelv', 'kiváló', 'jó', 'közepes', 'gyenge'
+            'szakmai', 'üzleti', 'társalgási', 'alapfok', 'anyanyelv', 'kiváló', 'jó', 'közepes', 'gyenge',
+            # Additional Hungarian proficiency levels
+            'kompetens', 'képzett', 'szakképzett', 'tapasztalt', 'megfelelő', 'elégséges', 'korlátozott', 'funkcionális'
         ]
 
     def get_nlp_model_for_text(self, text: str):
@@ -105,70 +126,73 @@ class LanguageExtractor:
         
         # Try to use parsed sections first if available
         if parsed_sections and parsed_sections.get('languages'):
+            print("Using parsed languages section")
             languages_text = ' '.join(parsed_sections['languages'])
             if languages_text.strip():
-                # First try to find structured language-proficiency pairs
-                matches = re.findall(r'(\b[A-Za-z]+\b)\s*[-–:]\s*(\b[A-Za-z\s]+)', languages_text)
-                for match in matches:
-                    language, proficiency = match
-                    language = language.lower()
-                    proficiency = proficiency.lower()
-                    
-                    # Check both English and Hungarian names
-                    is_valid_language = (
-                        language in self.predefined_languages or 
-                        any(language == hun_name.lower() for hun_name in self.known_languages.values())
-                    )
-                    
-                    if is_valid_language and any(level in proficiency for level in self.proficiency_levels):
-                        # Convert Hungarian language name to English if needed
-                        for eng_name, hun_name in self.known_languages.items():
-                            if language == hun_name.lower():
-                                language = eng_name
-                                break
-                            
-                        if language not in found_languages:
-                            languages.append({
-                                'language': language.title(),
-                                'proficiency': proficiency.lower()
-                            })
-                            found_languages.add(language)
-                
-                # Then look for language mentions with nearby proficiency levels
-                for language, hungarian_name in self.known_languages.items():
-                    if language not in found_languages and (
-                        language in languages_text.lower() or 
-                        hungarian_name.lower() in languages_text.lower()
+                # Process each known language
+                for eng_name, hun_name in self.known_languages.items():
+                    if eng_name not in found_languages and (
+                        eng_name in languages_text.lower() or 
+                        hun_name.lower() in languages_text.lower()
                     ):
-                        # Find the closest proficiency level
-                        proficiency = self._find_closest_proficiency(languages_text, language, hungarian_name)
-                        if proficiency:
-                            languages.append({
-                                'language': language.title(),
-                                'proficiency': proficiency.lower()
-                            })
-                            found_languages.add(language)
+                        # Find proficiency if available
+                        sentences = languages_text.split('.')
+                        proficiency = ''
+                        
+                        for sentence in sentences:
+                            if eng_name in sentence.lower() or hun_name.lower() in sentence.lower():
+                                # Look for structured format first (Language - Level)
+                                matches = re.findall(
+                                    rf'({re.escape(eng_name)}|{re.escape(hun_name)})\s*[-–:]\s*([^\.]+)',
+                                    sentence,
+                                    re.IGNORECASE
+                                )
+                                if matches:
+                                    proficiency = matches[0][1].strip()
+                                    break
+                                
+                                # If no structured format, try to find any proficiency info
+                                words = sentence.split()
+                                lang_idx = -1
+                                for idx, word in enumerate(words):
+                                    if eng_name in word.lower() or hun_name.lower() in word.lower():
+                                        lang_idx = idx
+                                        break
+                                
+                                if lang_idx >= 0 and lang_idx < len(words) - 1:
+                                    # Take the next few words as potential proficiency
+                                    proficiency = ' '.join(words[lang_idx + 1:min(lang_idx + 4, len(words))])
+                                    proficiency = re.sub(r'[,\(\)]', '', proficiency).strip()
+                        
+                        # Add language even if no proficiency found
+                        languages.append({
+                            'language': eng_name.title(),
+                            'proficiency': proficiency.lower() if proficiency else ''
+                        })
+                        found_languages.add(eng_name)
                 
                 # If we found languages in the parsed section, return them
                 if languages:
                     return languages
         
-        # Only fallback to processing entire text if no languages found in parsed sections
+        # Fallback to processing entire text if no languages found in parsed sections
         if not languages:
+            print("Using fallback language extraction")
             section_lines = self.extract_section(text, self.section_headers['languages'])
             if section_lines:
                 section_text = ' '.join(section_lines)
-                # Reuse the same logic as above for the fallback
-                matches = re.findall(r'(\b[A-Za-z]+\b)\s*[-–:]\s*(\b[A-Za-z\s]+)', section_text)
-                for match in matches:
-                    language, proficiency = match
-                    language = language.lower()
-                    if language in self.predefined_languages and language not in found_languages:
+                # Use the same flexible matching logic for the fallback
+                for eng_name, hun_name in self.known_languages.items():
+                    if eng_name not in found_languages and (
+                        eng_name in section_text.lower() or 
+                        hun_name.lower() in section_text.lower()
+                    ):
+                        proficiency = self._find_closest_proficiency(section_text, eng_name, hun_name)
                         languages.append({
-                            'language': language.title(),
-                            'proficiency': proficiency.lower()
+                            'language': eng_name.title(),
+                            'proficiency': proficiency.lower() if proficiency else ''
                         })
-                        found_languages.add(language)
+                        found_languages.add(eng_name)
         
         return languages if languages else [{'language': '', 'proficiency': ''}]
 
@@ -189,7 +213,6 @@ class LanguageExtractor:
     
     @property
     def predefined_languages(self):
-        """A predefined list of languages with their ISO codes."""
         return {
             'english': 'en',
             'hungarian': 'hu',
@@ -203,6 +226,8 @@ class LanguageExtractor:
             'korean': 'ko',
             'arabic': 'ar',
             'hindi': 'hi',
+            'urdu': 'ur',
+            'punjabi': 'pa',
             'portuguese': 'pt',
             'dutch': 'nl',
             'polish': 'pl',
@@ -220,7 +245,13 @@ class LanguageExtractor:
             'swedish': 'sv',
             'norwegian': 'no',
             'danish': 'da',
-            'finnish': 'fi'
+            'finnish': 'fi',
+            'maltese': 'mt',
+            'basque': 'eu',
+            'galician': 'gl',
+            'welsh': 'cy',
+            'irish': 'ga',
+            'scottish': 'gd'
         }
     
     def extract_proficiency_from_context(self, doc, language):
