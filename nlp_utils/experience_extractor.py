@@ -9,14 +9,27 @@ class ExperienceExtractor:
             'experience': [
                 'experience', 'work experience', 'employment history', 'work history', 
                 'professional experience', 'job experience', 'career history', 
-                'previous employment', 'past roles', 'work background', 'employment record', 'work experiences', 'project experience'
+                'previous employment', 'past roles', 'work background', 'employment record', 
+                'work experiences', 'project experience', 'job history', 'work roles', 
+                'employment details', 'career path', 'job history records', 'work life', 
+                'job background', 'employment experiences', 'career experiences'
             ]
         }
         
         self.job_indicators = [
             'developer', 'engineer', 'manager', 'consultant', 'analyst', 
             'specialist', 'coordinator', 'assistant', 'director', 'lead', 'internship',
-            'intern', 'trainee', 'administrator', 'supervisor'
+            'intern', 'trainee', 'administrator', 'supervisor',
+            'software engineer', 'data scientist', 'data analyst', 'product manager',
+            'project manager', 'business analyst', 'quality assurance', 'devops engineer',
+            'system architect', 'network engineer', 'database administrator', 'web developer',
+            'mobile developer', 'UI/UX designer', 'technical writer', 'cloud engineer',
+            'security analyst', 'IT support', 'solutions architect', 'research scientist',
+            'game developer', 'full stack developer', 'backend developer', 'frontend developer', 'front-end developer', 'back-end developer',
+            'machine learning engineer', 'AI engineer', 'blockchain developer', 'site reliability engineer',
+            'digital marketing specialist', 'SEO specialist', 'content strategist', 'product designer',
+            'application support', 'technical support', 'business intelligence analyst', 'data engineer',
+            'CRM specialist', 'ERP consultant', 'e-commerce manager', 'social media manager'
         ]
         
         self.company_indicators = ['inc', 'ltd', 'llc', 'corp', 'gmbh']
@@ -32,6 +45,24 @@ class ExperienceExtractor:
             r'\d{4}/\d{2}/\d{2}',  # Alternative format
             r'\d{2}/\d{2}/\d{4}'   # Alternative format
         ]
+        
+        # Add more company indicators
+        self.company_indicators.extend([
+            'ag', 'kft', 'zrt', 'nyrt', 'bt', 'rt', 'plc', 'sa', 'nv', 'oy',
+            'ab', 'as', 'spa', 'bv', 'company', 'group', 'solutions', 
+            'technologies', 'systems', 'software', 'consulting', 'services',
+            'international', 'global', 'digital', 'tech',
+            # Additional Hungarian indicators
+            'zrt', 'kft', 'bt', 'nyrt', 'kft.', 'zrt.', 'bt.', 'nyrt.', 'kft', 'zrt', 
+            # Common indicators from around the world
+            'inc', 'corp', 'ltd', 'plc', 'gmbh', 'sarl', 'pty', 'llc', 'ag', 'sa', 
+            'oy', 'nv', 'ab', 'as', 'spa', 'bv', 'group', 'solutions', 'technologies', 
+            'systems', 'software', 'consulting', 'services', 'international', 'global', 
+            'digital', 'tech', 'limited', 'company', 'enterprise', 'firm', 'business', 
+            'association', 'foundation', 'organization', 'cooperative', 'trust', 
+            'consortium', 'partnership', 'joint venture', 'agency', 'network', 
+            'platform', 'group', 'services', 'ventures', 'development', 'holdings'
+        ])
 
     def extract_section(self, text: str, section_keywords: List[str]) -> List[str]:
         """Extract a section from text based on keywords and NLP context."""
@@ -80,17 +111,80 @@ class ExperienceExtractor:
         # Use spaCy's NER to find date entities
         date_entities = [ent.text for ent in doc.ents if ent.label_ == 'DATE']
 
-        # If date entities are found, return them as a single string
+        # If date entities are found, standardize and return them
         if date_entities:
-            return ' to '.join(date_entities)
+            standardized_dates = [self._standardize_date(date) for date in date_entities]
+            return ' to '.join(standardized_dates)
 
         # Attempt to find date ranges using regex
         for pattern in self.date_patterns:
             matches = re.findall(pattern, text, re.IGNORECASE)
             if matches:
-                return ' to '.join(matches)  # Return the raw matches without normalization
+                standardized_dates = [self._standardize_date(match) for match in matches]
+                return ' to '.join(standardized_dates)
 
         return None
+
+    def _standardize_date(self, date_str: str) -> str:
+        """Standardize date format to DD/MM/YYYY."""
+        # Handle month names
+        month_map = {
+            'january': '01', 'february': '02', 'march': '03', 'april': '04',
+            'may': '05', 'june': '06', 'july': '07', 'august': '08',
+            'september': '09', 'october': '10', 'november': '11', 'december': '12',
+            'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04', 'jun': '06',
+            'jul': '07', 'aug': '08', 'sep': '09', 'oct': '10', 'nov': '11',
+            'dec': '12'
+        }
+        
+        # Handle seasons
+        season_map = {
+            'spring': '03',
+            'summer': '06',
+            'fall': '09',
+            'autumn': '09',
+            'winter': '12'
+        }
+        
+        date_str = date_str.lower().strip()
+        
+        # Handle "Present" or "Current"
+        if any(word in date_str.lower() for word in ['present', 'current', 'now']):
+            from datetime import datetime
+            today = datetime.now()
+            return f"{today.day:02d}/{today.month:02d}/{today.year}"
+        
+        # Extract year
+        year_match = re.search(r'\d{4}', date_str)
+        if not year_match:
+            return date_str  # Return original if no year found
+        
+        year = year_match.group()
+        
+        # Handle seasons
+        for season, month in season_map.items():
+            if season in date_str:
+                return f"01/{month}/{year}"
+        
+        # Handle month names
+        for month_name, month_num in month_map.items():
+            if month_name in date_str:
+                # Try to extract day
+                day_match = re.search(r'\b(\d{1,2})\b', date_str)
+                day = day_match.group() if day_match else '01'
+                return f"{int(day):02d}/{month_num}/{year}"
+        
+        # Handle numeric formats
+        numeric_match = re.search(r'(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})', date_str)
+        if numeric_match:
+            day, month, year = numeric_match.groups()
+            # Assume MM/DD/YYYY if month ≤ 12 and day > 12
+            if int(month) <= 12 and int(day) > 12:
+                day, month = month, day
+            return f"{int(day):02d}/{int(month):02d}/{year}"
+        
+        # If only year is found, use January 1st
+        return f"01/01/{year}"
 
     def is_likely_company(self, text: str) -> bool:
         """Check if text is likely a company name using NLP and additional heuristics."""
@@ -99,7 +193,10 @@ class ExperienceExtractor:
             return False
         
         # Skip if text contains typical description phrases
-        skip_phrases = ['responsible for', 'worked on', 'developed', 'managed', 'led', 'using', 'including']
+        skip_phrases = [
+            'responsible for', 'worked on', 'developed', 'managed', 'led', 
+            'using', 'including', 'working with', 'supporting', 'maintaining'
+        ]
         if any(phrase in text.lower() for phrase in skip_phrases):
             return False
 
@@ -109,27 +206,20 @@ class ExperienceExtractor:
         for ent in doc.ents:
             if ent.label_ in {'ORG', 'GPE', 'PRODUCT'}:
                 return True
-        # Fallback to heuristic checks if no organization entities are found
+
         text_lower = text.lower()
         
         # Check for company legal suffixes
-        if any(indicator in text_lower for indicator in self.company_indicators):
+        if any(f" {indicator}" in f" {text_lower}" for indicator in self.company_indicators):
             return True
         
         # Check for capitalization patterns typical of company names
         if text.istitle() or text.isupper():
-            # But exclude job titles
-            if not any(indicator in text_lower for indicator in self.job_indicators):
+            # But exclude job titles and ensure it's not just a single word
+            if (not any(indicator in text_lower for indicator in self.job_indicators) and 
+                len(text.split()) > 1):
                 return True
-            
-        # Check for company-specific patterns
-        company_patterns = [
-            r'\b(?:Inc|Ltd|LLC|Corp|GmbH|Co|Company|Group|Solutions|Technologies|Systems)\b',
-            r'\b(?:Software|Consulting|Services|International|Global|Digital|Tech)\b'
-        ]
-        if any(re.search(pattern, text, re.IGNORECASE) for pattern in company_patterns):
-            return True
-
+        
         return False
 
     def is_valid_company_structure(self, text: str) -> bool:
@@ -159,15 +249,6 @@ class ExperienceExtractor:
         if any(phrase in text.lower() for phrase in skip_phrases):
             return False
 
-        # Extended job indicators
-        extended_indicators = self.job_indicators + [
-            'architect', 'designer', 'programmer', 'administrator', 'technician',
-            'officer', 'executive', 'founder', 'head', 'chief', 'president',
-            'vp', 'vice president', 'principal', 'senior', 'junior', 'associate',
-            'full-stack', 'frontend', 'backend', 'software', 'web', 'mobile',
-            'data', 'system', 'network', 'cloud', 'devops', 'qa', 'test'
-        ]
-
         # Check for job title patterns
         job_patterns = [
             r'\b(?:Sr|Jr|Senior|Junior|Lead|Chief|Head|Principal)\b.*?(?:Developer|Engineer|Architect|Manager|Designer)',
@@ -178,7 +259,7 @@ class ExperienceExtractor:
         text_lower = text.lower()
         
         # Check for job indicators
-        if any(indicator in text_lower for indicator in extended_indicators):
+        if any(indicator in text_lower for indicator in self.job_indicators):
             return True
         
         # Check for job title patterns
@@ -338,14 +419,28 @@ class ExperienceExtractor:
             'launched', 'built', 'achieved', 'increased', 'reduced', 'streamlined', 'automated',
             'collaborated', 'initiated', 'organized', 'planned', 'executed', 'delivered',
             'supported', 'trained', 'mentored', 'researched', 'resolved', 'enhanced',
-            'generated', 'facilitated', 'monitored', 'evaluated', 'tested', 'deployed'
+            'generated', 'facilitated', 'monitored', 'evaluated', 'tested', 'deployed',
+            'orchestrated', 'directed', 'enhanced', 'formulated', 'spearheaded', 'executed',
+            'drove', 'cultivated', 'influenced', 'championed', 'navigated', 'streamlined',
+            'contributed', 'implemented', 'co-created', 'innovated', 'transformed', 'optimized',
+            'enhanced', 'maximized', 'restructured', 'revamped', 'modernized', 'pioneered',
+            'coordinated', 'facilitated', 'mentored', 'trained', 'guided', 'advised', 'consulted',
+            'collaborated', 'partnered', 'networked', 'engaged', 'interfaced', 'communicated',
+            'articulated', 'documented', 'reported', 'analyzed', 'assessed', 'evaluated',
+            'validated', 'synthesized', 'compiled', 'produced', 'crafted', 'designed', 'engineered'
         }
         
         # Technical terms that indicate work-related content
         tech_terms = {
             'project', 'system', 'software', 'application', 'database', 'platform',
             'infrastructure', 'framework', 'api', 'service', 'solution', 'tool',
-            'technology', 'process', 'methodology', 'architecture', 'code', 'development'
+            'technology', 'process', 'methodology', 'architecture', 'code', 'development',
+            'deployment', 'integration', 'testing', 'maintenance', 'support', 'analysis',
+            'design', 'implementation', 'optimization', 'scalability', 'performance',
+            'security', 'user experience', 'interface', 'database management', 'cloud',
+            'virtualization', 'automation', 'monitoring', 'configuration', 'scripting',
+            'debugging', 'version control', 'repository', 'collaboration', 'agile',
+            'scrum', 'devops', 'continuous integration', 'continuous deployment', 'microservices'
         }
         
         text_lower = text.lower()
