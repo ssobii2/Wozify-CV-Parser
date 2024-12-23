@@ -210,7 +210,6 @@ class SkillsExtractor:
 
         # Try to use parsed sections first if available
         if parsed_sections and 'skills' in parsed_sections and parsed_sections['skills']:
-            print("Using parsed skills section")
             for skills_text in parsed_sections['skills']:
                 if not skills_text.strip():
                     continue
@@ -262,7 +261,6 @@ class SkillsExtractor:
         
         # Only fallback to full text extraction if no skills found in parsed sections
         if not skills:
-            print("Using fallback skill extraction")
             section_lines = self.extract_section(text, self.section_headers['skills'])
             if section_lines:
                 section_text = ' '.join(section_lines)

@@ -1,5 +1,5 @@
 import re
-from typing import Dict
+from typing import Dict, Optional, List
 from langdetect import detect, LangDetectException
 import spacy
 from spacy.matcher import Matcher
@@ -27,7 +27,7 @@ class ProfileExtractor:
         except LangDetectException:
             return self.nlp_en
 
-    def extract_profile(self, text: str) -> Dict[str, str]:
+    def extract_profile(self, text: str, parsed_sections: Optional[Dict] = None) -> Dict[str, str]:
         """Extract profile information using pattern matching and NLP."""
         profile_data = {
             'name': "",
@@ -54,8 +54,8 @@ class ProfileExtractor:
             profile_data['phone'] = self.extract_phone(text)
             profile_data['url'] = self.extract_url(text)
 
-            # Extract summary
-            profile_data['summary'] = self.extract_summary(text)
+            # Extract summary with parsed sections
+            profile_data['summary'] = self.extract_summary(text, parsed_sections)
 
         except Exception as e:
             print(f"Warning: Error in profile extraction: {str(e)}")
@@ -222,20 +222,60 @@ class ProfileExtractor:
             print(f"Warning: Error extracting URL: {str(e)}")
             return ""
 
-    def extract_summary(self, text: str) -> str:
-        """Extract summary by detecting headers and capturing text until next section."""
+    def extract_summary(self, text: str, parsed_sections: Optional[Dict] = None) -> str:
+        """Extract summary with priority: dedicated summary section > profile section > fallback."""
         try:
-            # English and Hungarian summary headers
+            # Clean and join function for sections
+            def clean_and_join(lines: List[str]) -> str:
+                # Filter out contact info, links, and short headers
+                filtered_lines = []
+                for line in lines:
+                    line = line.strip()
+                    # Skip if line contains:
+                    if (re.search(r'[\w\.-]+@[\w\.-]+', line) or  # email
+                        re.search(r'[\+\d\s\(\)-]{10,}', line) or  # phone
+                        re.search(r'https?://', line) or           # urls
+                        len(line.split()) < 3 or                   # too short
+                        any(line.lower().startswith(word) for word in ['links', 'portfolio', 'github']) or
+                        # Education-related content
+                        any(word in line.lower() for word in [
+                            'coursework:', 'relevant coursework', 'additional coursework',
+                            'mathematics', 'engineering and systems:', 'database and information systems:',
+                            'programming and software development:', 'computer science foundations:',
+                            'miscellaneous technical skills:', 'cultural and language studies:',
+                            'physical education:'
+                        ])):
+                        continue
+                    filtered_lines.append(line)
+                return ' '.join(filtered_lines).strip()
+
+            # 1. First priority: Check parsed summary section
+            if parsed_sections and parsed_sections.get('summary'):
+                summary_text = clean_and_join(parsed_sections['summary'])
+                if summary_text:
+                    return summary_text
+
+            # 2. Second priority: Check parsed profile section
+            if parsed_sections and parsed_sections.get('profile'):
+                profile_text = clean_and_join(parsed_sections['profile'])
+                if profile_text:
+                    return profile_text
+
+            # 3. Fallback: Use existing header-based extraction
             summary_headers = [
                 "summary", "profile", "about me", "introduction", "objective", "overview",
                 "összefoglaló", "bemutatkozás", "profil", "rólam", "szakmai célok", "áttekintés",
-                "szakmai profil", "szakmai bemutatkozás"
+                "szakmai profil", "szakmai bemutatkozás", "career summary", "professional summary", 
+                "personal statement", "executive summary", "key qualifications", "highlights", 
+                "skills summary", "career objective", "mission statement", "self-introduction", 
+                "biography", "background", "experience summary", "value proposition"
             ]
             
-            # Section headers in both languages
             section_headers = [
                 'experience', 'education', 'skills', 'projects', 'work', 'employment', 'qualifications',
-                'tapasztalat', 'tanulmányok', 'képzettség', 'készségek', 'projektek', 'munka', 'végzettség'
+                'tapasztalat', 'tanulmányok', 'képzettség', 'készségek', 'projektek', 'munka', 'végzettség',
+                'summary', 'certifications', 'awards', 'publications', 'interests', 'references', 'professional experience',
+                'job history', 'career', 'training', 'internships', 'volunteer experience', 'achievements', 'competencies'
             ]
             
             header_pattern = "|".join([fr"\b{header}\b" for header in summary_headers])
@@ -246,19 +286,22 @@ class ProfileExtractor:
 
             for line in text.splitlines():
                 line = line.strip()
-                # Detect the summary header
                 if re.search(header_pattern, line, re.IGNORECASE):
                     capturing = True
                     continue
 
-                # If capturing summary, add lines until reaching a new section
                 if capturing:
                     if section_pattern.match(line):
-                        break  # Stop capturing at a new section
-                    if line:  # Only add non-empty lines
+                        break
+                    if line:
                         summary_text.append(line)
 
-            return " ".join(summary_text).strip()
+            fallback_text = clean_and_join(summary_text)
+            if fallback_text:
+                return fallback_text
+
+            return ""
+            
         except Exception as e:
             print(f"Warning: Error extracting summary: {str(e)}")
             return ""

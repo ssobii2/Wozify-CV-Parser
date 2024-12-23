@@ -126,7 +126,6 @@ class LanguageExtractor:
         
         # Try to use parsed sections first if available
         if parsed_sections and parsed_sections.get('languages'):
-            print("Using parsed languages section")
             languages_text = ' '.join(parsed_sections['languages'])
             if languages_text.strip():
                 # Process each known language
@@ -177,7 +176,6 @@ class LanguageExtractor:
         
         # Fallback to processing entire text if no languages found in parsed sections
         if not languages:
-            print("Using fallback language extraction")
             section_lines = self.extract_section(text, self.section_headers['languages'])
             if section_lines:
                 section_text = ' '.join(section_lines)

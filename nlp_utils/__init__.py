@@ -50,23 +50,19 @@ class CVExtractor:
         }
 
         self._cached_sections = {}  # Add this line to store parsed sections
+        self._section_cache = {}  # Add cache for parsed sections
 
-    def _get_parsed_sections(self, text: str) -> Optional[Dict]:
-        """Get parsed sections with caching to avoid multiple parses."""
-        # Use text hash as cache key
-        cache_key = hash(text)
-        
-        if cache_key in self._cached_sections:
-            return self._cached_sections[cache_key]
-        
-        try:
-            parsed_sections = self.section_parser.parse_sections(text)
-            self._cached_sections[cache_key] = parsed_sections
-            return parsed_sections
-        except Exception as e:
-            print(f"Section parsing failed, using direct extraction: {str(e)}")
-            self._cached_sections[cache_key] = None
-            return None
+    def _get_parsed_sections(self, text: str) -> Dict[str, List[str]]:
+        """Get or create parsed sections for the given text."""
+        # Use cached sections if available
+        text_hash = hash(text)
+        if text_hash in self._section_cache:
+            return self._section_cache[text_hash]
+
+        # Parse sections and cache them
+        parsed_sections = self.section_parser.parse_sections(text)
+        self._section_cache[text_hash] = parsed_sections
+        return parsed_sections
 
     def get_nlp_model_for_text(self, text: str):
         """Determine the language of the text and return the appropriate spaCy NLP model."""
@@ -272,6 +268,26 @@ class CVExtractor:
         except Exception as e:
             print(f"Error extracting languages: {str(e)}")
             return [{'language': '', 'proficiency': ''}]
+
+    def extract_profile(self, text: str) -> Dict[str, str]:
+        """Extract profile information using ProfileExtractor."""
+        try:
+            # Get parsed sections from cache or parse new
+            parsed_sections = self._get_parsed_sections(text)
+            
+            # Pass parsed sections to profile extractor
+            return self.profile_extractor.extract_profile(text, parsed_sections)
+            
+        except Exception as e:
+            print(f"Error extracting profile: {str(e)}")
+            return {
+                'name': "",
+                'email': "",
+                'phone': "",
+                'location': "",
+                'url': "",
+                'summary': ""
+            }
 
 __all__ = [
     'ProfileExtractor', 'EducationExtractor', 'EducationExtractorHu', 'ExperienceExtractor', 'ExperienceExtractorHu',

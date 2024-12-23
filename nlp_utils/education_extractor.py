@@ -450,9 +450,7 @@ class EducationExtractor:
             ]
             if self._validate_section_data(section_lines):
                 education_lines = section_lines
-                print(f"Found {len(education_lines)} valid lines in parsed education section")
             else:
-                print("Parsed section data invalid or insufficient, using fallback")
                 used_fallback = True
         
         # Only use fallback if no parsed sections provided
@@ -469,8 +467,6 @@ class EducationExtractor:
                 section_text = self.extract_section(text, [pattern])
                 if section_text:
                     education_lines.extend([line.strip() for line in section_text if line.strip()])
-            
-            print(f"Extracted {len(education_lines)} lines using fallback method")
 
         # Only use full text scan if no education section found and no parsed sections provided
         if not education_lines and not parsed_sections:
@@ -582,7 +578,6 @@ class EducationExtractor:
             if entry.get('school') or entry.get('degree'):
                 cleaned_data.append(entry)
         
-        print(f"Final education entries: {len(cleaned_data)}")
         return cleaned_data if cleaned_data else []
 
     def extract_honors(self, text: str) -> List[str]:
