@@ -2,8 +2,8 @@
 venv/
 
 # Uploaded and generated files
-uploads/*
-outputs/*
+uploads/
+outputs/
 
 # Python cache
 __pycache__/
@@ -27,3 +27,5 @@ __pycache__/
 app.log
 
 textcat_output_v2/
+fasttext_output_v3/
+CVs/

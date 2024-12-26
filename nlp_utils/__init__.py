@@ -7,6 +7,7 @@ from .skills_extractor import SkillsExtractor
 from .language_extractor import LanguageExtractor
 from .current_position_extractor import CurrentPositionExtractor
 from .cv_section_parser import CVSectionParser
+from .cv_section_parser_hu import CVSectionParserHu
 
 import re
 import spacy
@@ -30,6 +31,7 @@ class CVExtractor:
         self.language_extractor = LanguageExtractor(nlp_en, nlp_hu)
         self.current_position_extractor = CurrentPositionExtractor(nlp_en, nlp_hu)
         self.section_parser = CVSectionParser()
+        self.section_parser_hu = CVSectionParserHu()
         
         # Define date patterns for date extraction
         self.date_patterns = [
@@ -59,8 +61,17 @@ class CVExtractor:
         if text_hash in self._section_cache:
             return self._section_cache[text_hash]
 
-        # Parse sections and cache them
-        parsed_sections = self.section_parser.parse_sections(text)
+        # Detect language and use appropriate parser
+        try:
+            language = detect(text)
+            if language == 'hu':
+                parsed_sections = self.section_parser_hu.parse_sections(text)
+            else:
+                parsed_sections = self.section_parser.parse_sections(text)
+        except:
+            # Fallback to English parser if language detection fails
+            parsed_sections = self.section_parser.parse_sections(text)
+
         self._section_cache[text_hash] = parsed_sections
         return parsed_sections
 

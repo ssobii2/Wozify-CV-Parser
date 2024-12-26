@@ -26,29 +26,28 @@ class CVSectionParser:
             # Store current text being processed
             self.current_text = ""
             
-            # Load the text classification model once during initialization
+            # Load the English spaCy model
             try:
-                self.nlp = spacy.load("textcat_output_v2/model-best")
-                logger.info("Loaded text classification model")
+                self.model = spacy.load("textcat_output_v2/model-best")
+                logger.info("Loaded English text classification model")
             except Exception as e:
-                self.nlp = None
-                logger.warning(f"Text classification model not found, falling back to pattern matching only: {str(e)}")
+                self.model = None
+                logger.warning(f"English text classification model not found, falling back to pattern matching only: {str(e)}")
 
     def _init_patterns(self):
         # Language-related patterns and keywords
         self.language_patterns = {
             'proficiency_levels': [
-                r'(?i)(native|fluent|advanced|intermediate|basic|beginner|elementary|proficient|anyanyelv|folyékony|haladó|középszint|alapszint|kezdő)',
-                r'(?i)(mother\s*tongue|business\s*level|working\s*knowledge|professional\s*working|anyanyelvi\s*szint|üzleti\s*szint|munkavégzés\s*szintje)',
+                r'(?i)(native|fluent|advanced|intermediate|basic|beginner|elementary|proficient)',
+                r'(?i)(mother\s*tongue|business\s*level|working\s*knowledge|professional\s*working)',
                 r'(?i)\b(c2|c1|b2|b1|a2|a1)\b'
             ],
             'languages': [
-                r'(?i)\b(english|german|french|spanish|hungarian|chinese|japanese|korean|arabic|russian|italian|portuguese|dutch|hindi|urdu|bengali|punjabi|tamil|telugu|marathi|gujarati|kannada|malayalam|thai|vietnamese|indonesian|malay|turkish|persian|polish|czech|slovak|romanian|bulgarian|croatian|serbian|slovenian|ukrainian|greek|hebrew|swedish|norwegian|danish|finnish|estonian|latvian|lithuanian|magyar|angol|német|francia|spanyol|olasz|orosz|kínai|japán)\b'
+                r'(?i)\b(english|german|french|spanish|chinese|japanese|korean|arabic|russian|italian|portuguese|dutch|hindi|urdu|bengali|punjabi|tamil|telugu|marathi|gujarati|kannada|malayalam|thai|vietnamese|indonesian|malay|turkish|persian|polish|czech|slovak|romanian|bulgarian|croatian|serbian|slovenian|ukrainian|greek|hebrew|swedish|norwegian|danish|finnish|estonian|latvian|lithuanian)\b'
             ],
             'section_indicators': [
                 r'(?i)^languages?(\s+skills?|\s+proficiency|\s+knowledge)?:?\s*$',
-                r'(?i)^language\s+(skills?|proficiency|knowledge)\s*:?\s*$',
-                r'(?i)^nyelv(ek)?(\s+készségek?|\s+ismeretek|\s+szint)?:?\s*$'
+                r'(?i)^language\s+(skills?|proficiency|knowledge)\s*:?\s*$'
             ]
         }
         
@@ -72,56 +71,56 @@ class CVSectionParser:
         # Common section headers in CVs
         self.section_headers = {
             "summary": [
-                r"(?i)^(professional\s+summary|executive\s+summary|career\s+summary|summary\s+of\s+qualifications|szakmai\s+összefoglaló|szakmai\s+összefoglalás)$",
-                r"(?i)^(summary|career\s+objective|professional\s+objective|összefoglaló|szakmai\s+célkitűzés)$"
+                r"(?i)^(professional\s+summary|executive\s+summary|career\s+summary|summary\s+of\s+qualifications)$",
+                r"(?i)^(summary|career\s+objective|professional\s+objective)$"
             ],
             "profile": [
-                r"(?i)^(profile|about\s*me|personal\s+information|introduction|contact\s+information|profil|bemutatkozás|személyes\s+adatok|kapcsolat)$",
-                r"(?i)^(personal\s+details|personal\s+profile|contact|contact\s+details|személyes\s+profil|elérhetőségek)$"
+                r"(?i)^(profile|about\s*me|personal\s+information|introduction|contact\s+information)$",
+                r"(?i)^(personal\s+details|personal\s+profile|contact|contact\s+details)$"
             ],
             "education": [
-                r"(?i)^(education|academic|qualifications?|studies|oktatás|akadémiai|képesítések?|tanulmányok)$",
-                r"(?i)^(educational\s+background|academic\s+history|academic\s+qualifications?|oktatási\s+hátter|akadémiai\s+előzmények|akadémiai\s+képesítések?)$"
+                r"(?i)^(education|academic|qualifications?|studies)$",
+                r"(?i)^(educational\s+background|academic\s+history|academic\s+qualifications?)$"
             ],
             "experience": [
-                r"(?i)^(experience|expertise|employment|work|career|professional\s+experience|tapasztalat|foglalkoztatós|munka|karrier|szakmai\s+tapasztalat)$",
-                r"(?i)^(work\s+history|employment\s+history|work\s+experience|professional\s+background|munkatörténet|foglalkoztatási\s+történet|munkatapasztalat|szakmai\s+hátter)$",
-                r"(?i)^(work\s+experience\s*/?\s*projects?|munkatapasztalat\s*/?\s*projektek?)$"
+                r"(?i)^(experience|expertise|employment|work|career|professional\s+experience)$",
+                r"(?i)^(work\s+history|employment\s+history|work\s+experience|professional\s+background)$",
+                r"(?i)^(work\s+experience\s*/?\s*projects?)$"
             ],
             "languages": [
-                r"(?i)^(languages?|language\s+skills?|nyelv(ek)?|nyelvi\s+készségek?)$",
-                r"(?i)^(language\s+proficiency|linguistic\s+skills?|nyelvi\s+szint|nyelvi\s+készségek?)$"
+                r"(?i)^(languages?|language\s+skills?)$",
+                r"(?i)^(language\s+proficiency|linguistic\s+skills?)$"
             ],
             "skills": [
-                r"(?i)^(skills?|technical\s+skills?|competencies|expertise|it\s+knowledge|készségek?|technikai\s+készségek?|kompetenciák|szakértelem|it\s+ismeretek)$",
-                r"(?i)^(technical\s+expertise|core\s+competencies|professional\s+skills|technical\s+proficiencies|technical\s+skills|technikai\s+szakértelem|alapvető\s+kompetenciák|szakmai\s+készségek|technikai\s+ismeretek|technikai\s+készségek)$",
-                r"(?i)^(development\s+tools?|programming\s+knowledge|technical\s+stack|fejlesztési\s+eszközök?|programozási\s+ismeretek|technikai\s+halmaz)$",
-                r"(?i)^(technologies|tools?(\s+and\s+technologies)?|software|hardware|technológiák|eszközök?(\s+és\s+technológiák)?|szoftver|hardver)$"
+                r"(?i)^(skills?|technical\s+skills?|competencies|expertise|it\s+knowledge)$",
+                r"(?i)^(technical\s+expertise|core\s+competencies|professional\s+skills|technical\s+proficiencies|technical\s+skills)$",
+                r"(?i)^(development\s+tools?|programming\s+knowledge|technical\s+stack)$",
+                r"(?i)^(technologies|tools?(\s+and\s+technologies)?|software|hardware)$"
             ],
             "projects": [
-                r"(?i)^(projects?|personal\s+projects?|academic\s+projects?|projektek?|személyes\s+projektek?|akadémiai\s+projektek?)$",
-                r"(?i)^(key\s+projects?|project\s+experience|technical\s+projects?|kulcsfontosságú\s+projektek?|projekt\s+tapasztalat|technikai\s+projektek?)$",
-                r"(?i)^(selected\s+projects?|notable\s+projects?|kiválasztott\s+projektek?|jelentős\s+projektek?)$"
+                r"(?i)^(projects?|personal\s+projects?|academic\s+projects?)$",
+                r"(?i)^(key\s+projects?|project\s+experience|technical\s+projects?)$",
+                r"(?i)^(selected\s+projects?|notable\s+projects?)$"
             ],
             "certifications": [
-                r"(?i)^(certifications?|certificates?|professional\s+certifications?|tanúsítványok?|bizonyítványok?|szakmai\s+tanúsítványok?)$",
-                r"(?i)^(accreditations?|qualifications?|awards?\s+and\s+certifications?|akkreditációk?|képesítések?|díjak?\s+és\s+tanúsítványok?)$"
+                r"(?i)^(certifications?|certificates?|professional\s+certifications?)$",
+                r"(?i)^(accreditations?|qualifications?|awards?\s+and\s+certifications?)$"
             ],
             "awards": [
-                r"(?i)^(awards?|honors?|achievements?|díjak?|kitüntetések?|eredmények?)$",
-                r"(?i)^(recognitions?|accomplishments?|awards?\s+and\s+achievements?|elismerések?|teljesítmények?|díjak?\s+és\s+eredmények?)$"
+                r"(?i)^(awards?|honors?|achievements?)$",
+                r"(?i)^(recognitions?|accomplishments?|awards?\s+and\s+achievements?)$"
             ],
             "publications": [
-                r"(?i)^(publications?|research|papers?|conferences?|publikációk?|kutatás|tanulmányok?|konferenciák?)$",
-                r"(?i)^(published\s+works?|research\s+papers?|scientific\s+publications?|publikált\s+munkák?|kutatási\s+tanulmányok?|tudományos\s+publikációk?)$"
+                r"(?i)^(publications?|research|papers?|conferences?)$",
+                r"(?i)^(published\s+works?|research\s+papers?|scientific\s+publications?)$"
             ],
             "interests": [
-                r"(?i)^(interests?|hobbies|activities|interests?,?\s+commitment|érdeklődési\s+körök?|hobbi|tevékenységek?|érdeklődési\s+körök?,?\s+elkötelezettség)$",
-                r"(?i)^(personal\s+interests?|extracurricular|other\s+activities|személyes\s+érdeklődés?|tanórán\s+kívüli|egyéb\s+tevékenységek)$"
+                r"(?i)^(interests?|hobbies|activities|interests?,?\s+commitment)$",
+                r"(?i)^(personal\s+interests?|extracurricular|other\s+activities)$"
             ],
             "references": [
-                r"(?i)^(references?|recommendations?|referenciák?|ajánlások?)$",
-                r"(?i)^(professional\s+references?|szakmai\s+referenciák?)$"
+                r"(?i)^(references?|recommendations?)$",
+                r"(?i)^(professional\s+references?)$"
             ]
         }
 
@@ -130,36 +129,30 @@ class CVSectionParser:
             "summary": {
                 "keywords": {
                     "years of experience", "expertise in", "background in", "specialized in",
-                    "proven track record", "professional experience", "skilled in", "focus on",
-                    "év tapasztalat", "szakterület", "szakértelem", "specializáció"
+                    "proven track record", "professional experience", "skilled in", "focus on"
                 },
                 "patterns": [
                     r"(?i)(\d+\+?\s+years?\s+of\s+experience\s+in)",
                     r"(?i)(proven\s+track\s+record\s+in)",
                     r"(?i)(specialized\s+in\s+developing|expertise\s+in\s+developing)",
-                    r"(?i)(background\s+in\s+[a-z\s]+development)",
-                    r"(?i)(\d+\+?\s+év\s+tapasztalat)",
-                    r"(?i)(szakmai\s+tapasztalattal\s+rendelkezik)"
+                    r"(?i)(background\s+in\s+[a-z\s]+development)"
                 ],
                 "negative_patterns": [
                     r"(?i)(@|tel:|phone:|mobile:|address:|email:)",
                     r"(?i)(20\d{2}\s*[-–]\s*(20\d{2}|present|current))",
-                    r"(?i)(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s*\d{4}",
-                    r"(?i)(született|lakcím|telefonszám|születési)"
+                    r"(?i)(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s*\d{4}"
                 ]
             },
             "profile": {
                 "keywords": {
                     "email", "phone", "address", "mobile", "linkedin", "github", "contact",
-                    "birth", "nationality", "gender", "marital", "driving license",
-                    "telefonszám", "lakcím", "születési", "állampolgárság", "jogosítvány"
+                    "birth", "nationality", "gender", "marital", "driving license"
                 },
                 "patterns": [
                     r"(?i)([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})",
                     r"(?i)(\+\d{1,2}[-\s]?\d{1,}[-\s]?\d{1,}[-\s]?\d{1,})",
                     r"(?i)(linkedin\.com|github\.com)",
-                    r"(?i)(date\s+of\s+birth|driving\s+license|marital\s+status)",
-                    r"(?i)(születési\s+idő|jogosítvány|családi\s+állapot)"
+                    r"(?i)(date\s+of\s+birth|driving\s+license|marital\s+status)"
                 ]
             }
         }
@@ -355,7 +348,10 @@ class CVSectionParser:
         return '\n'.join(processed_lines)
 
     def parse_sections(self, text: str) -> Dict[str, List[str]]:
-        """Parse a CV text into different sections with improved splitting logic."""
+        """Parse CV text into sections."""
+        if not text:
+            return {}
+        
         logger.info("Starting CV parsing...")
 
         # Store current text being processed
@@ -364,7 +360,7 @@ class CVSectionParser:
         # Preprocess text
         text = self._preprocess_text(text)
         
-        # Initialize sections including summary (all lowercase)
+        # Initialize sections
         sections = {
             "summary": [],
             "profile": [],
@@ -540,26 +536,6 @@ class CVSectionParser:
             and typical_format
         )
 
-    def _detect_language(self, text: str) -> str:
-        """Language detection using langdetect."""
-        try:
-            return detect(text)
-        except:
-            # Fallback to checking Hungarian keywords if langdetect fails
-            hungarian_keywords = [
-                'magyar', 'nyelv', 'folyékony', 'haladó', 'középszint', 'alapszint'
-            ]
-            text_lower = text.lower()
-            if any(keyword in text_lower for keyword in hungarian_keywords):
-                return 'hu'
-            return 'en'
-
-    def _get_model_and_tokenizer(self, language: str):
-        """Return the appropriate model and tokenizer based on the language."""
-        if language == 'hungarian':
-            return None, None
-        return None, None
-
     def _is_likely_separator(self, line: str, next_line: str = "") -> bool:
         """Check if a line is likely a natural separator in the CV."""
         # Common date patterns
@@ -624,3 +600,16 @@ class CVSectionParser:
             summary_score -= 2
             
         return "summary" if summary_score > profile_score else "profile"
+
+    def _classify_text_with_model(self, text: str) -> Dict[str, float]:
+        """Classify text using the spaCy model."""
+        if not self.model:
+            return {}
+        
+        try:
+            # spaCy prediction
+            doc = self.model(text)
+            return doc.cats
+        except Exception as e:
+            logger.warning(f"Error during text classification: {str(e)}")
+            return {}

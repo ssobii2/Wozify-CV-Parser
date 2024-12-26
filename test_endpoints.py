@@ -6,11 +6,12 @@ import os
 import json
 from pypdf import PdfReader
 from nlp_utils.cv_section_parser import CVSectionParser
+from nlp_utils.cv_section_parser_hu import CVSectionParserHu
 import torch
 from docx import Document
+from langdetect import detect
 
 client = TestClient(app)
-cv_section_parser = CVSectionParser()
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -19,7 +20,8 @@ logger = logging.getLogger(__name__)
 # Initialize parser and log device info
 device = "cuda" if torch.cuda.is_available() else "cpu"
 logger.info(f"Using device: {device}")
-cv_section_parser = CVSectionParser()
+cv_section_parser_en = CVSectionParser()
+cv_section_parser_hu = CVSectionParserHu()
 
 def extract_text_from_file(file_path):
     """Extract text from PDF or DOCX file."""
@@ -56,8 +58,14 @@ def test_cv_section_parser():
     os.makedirs(cv_dir_en, exist_ok=True)
     os.makedirs(output_dir, exist_ok=True)
 
+    # Set debug logging for this test
+    logging.getLogger().setLevel(logging.DEBUG)
+
     # Process CVs from both directories
-    for lang_dir, lang in [(cv_dir_hu, "Hungarian"), (cv_dir_en, "English")]:
+    for lang_dir, lang, parser in [
+        (cv_dir_hu, "hungarian", cv_section_parser_hu),
+        (cv_dir_en, "english", cv_section_parser_en)
+    ]:
         logger.info(f"\nProcessing {lang} CVs...")
         
         # Get all PDF and DOCX files from the directory
@@ -72,8 +80,9 @@ def test_cv_section_parser():
             if cv_text is None:
                 logger.error(f"Failed to process {cv_file}")
                 continue
-                
-            sections = cv_section_parser.parse_sections(cv_text)
+            
+            # Parse sections using appropriate parser
+            sections = parser.parse_sections(cv_text)
             
             # Create language-specific output subdirectories
             lang_output_dir = os.path.join(output_dir, lang.lower())
