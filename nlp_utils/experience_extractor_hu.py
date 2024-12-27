@@ -1,5 +1,5 @@
 import re
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 import spacy
 from langdetect import detect, LangDetectException
 import logging
@@ -138,7 +138,7 @@ class ExperienceExtractorHu:
                     
                     # Check for organization entities
                     for ent in doc.ents:
-                        if ent.label_ in {'ORG', 'GPE', 'PRODUCT'}:
+                        if ent.label_ in {'ORG'}:
                             return True
                             
                     # Use custom noun phrase extraction
@@ -215,66 +215,156 @@ class ExperienceExtractorHu:
         return any(indicator in text.lower() for indicator in self.job_indicators)
 
     def clean_text(self, text: str) -> str:
-        """Remove unwanted Unicode artifacts from text."""
-        # Remove specific unwanted Unicode characters
-        return re.sub(r'[\uf0b7\uf0d8\uf020\u2013\u2022\u2023]+', '', text).strip()
+        """Clean text from special characters and unnecessary whitespace."""
+        if not text:
+            return ""
+        
+        # Remove bullet points and similar markers
+        text = re.sub(r'[•▪■⚫●\-]', '', text)
+        
+        # Remove brackets and parentheses with their content if they don't contain years
+        text = re.sub(r'\([^)]*?(?<!\d{4})[^)]*?\)', '', text)
+        text = re.sub(r'\[[^\]]*?\]', '', text)
+        
+        # Remove special characters but keep Hungarian letters
+        text = re.sub(r'[^\w\s\-áéíóöőúüűÁÉÍÓÖŐÚÜŰ]', ' ', text)
+        
+        # Normalize whitespace
+        text = ' '.join(text.split())
+        
+        return text.strip()
 
     def extract_work_experience(self, text: str, parsed_sections: Optional[Dict] = None) -> List[Dict]:
-        """Extract detailed work experience information."""
-        work_data = []
-        current_entry = None
-
-        # Try to use parsed sections first if available
-        if parsed_sections and parsed_sections.get('experience'):
-            experience_lines = []
-            for section in parsed_sections['experience']:
-                experience_lines.extend([line.strip() for line in section.split('\n') if line.strip()])
-
-            if self._validate_section_data(experience_lines):
-                # Process the extracted lines
-                for line in experience_lines:
-                    # Split line by known delimiters for multiple entries
-                    sub_lines = re.split(r'\s*▪\s*|\s*-\s*', line)
-                    for sub_line in sub_lines:
-                        # Clean the text
-                        sub_line = self.clean_text(sub_line)
-
-                        # Check for date ranges as primary entry points
-                        date = self.extract_date_range(sub_line)
-                        if date:
-                            if current_entry and current_entry.get('descriptions'):
-                                work_data.append(current_entry)
-                            current_entry = {
-                                'company': '',
-                                'job_title': '',
-                                'date': date,
-                                'descriptions': []
-                            }
-                            continue
-
-                        # Identify job titles and companies
-                        if current_entry:
-                            if self.is_likely_job_title(sub_line) and not current_entry['job_title']:
-                                current_entry['job_title'] = sub_line
-                            elif self.is_likely_company(sub_line) and not current_entry['company']:
-                                current_entry['company'] = sub_line
-                            else:
-                                current_entry['descriptions'].append(sub_line)
-
-                if current_entry and current_entry.get('descriptions'):
-                    work_data.append(current_entry)
-
+        """Extract work experience entries from text."""
+        try:
+            # Try main extraction first
+            if parsed_sections and 'experience' in parsed_sections and parsed_sections['experience']:
+                work_data = []
+                for section in parsed_sections['experience']:
+                    # Changed _parse_entries to _split_into_entries
+                    entries = self._split_into_entries(section)
+                    for entry in entries:
+                        if entry.strip():
+                            date = self._extract_date(entry)
+                            if date:
+                                entry_text = self._clean_entry_text(entry, date)
+                                company, job_title, descriptions = self._parse_entry_parts(entry_text)
+                                
+                                exp_entry = {
+                                    'company': company.strip(),
+                                    'job_title': job_title.strip(),
+                                    'date': date.strip(),
+                                    'descriptions': descriptions
+                                }
+                                
+                                if exp_entry['company'] or exp_entry['job_title']:
+                                    work_data.append(exp_entry)
+                
+                # If main extraction returned empty results, try fallback
+                if not work_data:
+                    return self._extract_work_experience_fallback(text)
+                    
                 return work_data
 
-        # Fallback to current logic if no parsed sections
-        return self._extract_work_experience_fallback(text)
+            # If no parsed sections or empty experience section, use fallback
+            return self._extract_work_experience_fallback(text)
+
+        except Exception as e:
+            logging.warning(f"Experience extraction failed: {str(e)}, trying fallback")
+            return self._extract_work_experience_fallback(text)
+
+    def _split_into_entries(self, text: str) -> List[str]:
+        """Split text into experience entries."""
+        # First try to split by year patterns
+        entries = []
+        year_pattern = r'(?:19|20)\d{2}\s*[-–]\s*(?:(?:19|20)\d{2}|jelenleg|most|\?|…|\.{3})|(?:19|20)\d{2}\s*[-–]|(?:19|20)\d{2}'
+        
+        # Split by year pattern first
+        parts = re.split(f'({year_pattern})', text)
+        
+        current_entry = ''
+        for i, part in enumerate(parts):
+            if re.match(year_pattern, part):
+                if current_entry:
+                    entries.append(current_entry.strip())
+                current_entry = part
+            else:
+                current_entry += part
+            
+        if current_entry:
+            entries.append(current_entry.strip())
+        
+        # If no entries found by year, try bullet points
+        if not entries:
+            entries = [e.strip() for e in re.split(r'\s*[•▪■⚫●\-]\s*', text) if e.strip()]
+        
+        return entries
+
+    def _extract_date(self, text: str) -> str:
+        """Extract date from text."""
+        year_pattern = r'(?:19|20)\d{2}\s*[-–]\s*(?:(?:19|20)\d{2}|jelenleg|most|\?|…|\.{3})|(?:19|20)\d{2}\s*[-–]|(?:19|20)\d{2}'
+        match = re.search(year_pattern, text)
+        return match.group(0) if match else ''
+
+    def _clean_entry_text(self, text: str, date: str) -> str:
+        """Clean entry text by removing date and unnecessary characters."""
+        text = text.replace(date, '').strip()
+        text = re.sub(r'\s+', ' ', text)
+        return text
+
+    def _parse_entry_parts(self, text: str) -> Tuple[str, str, List[str]]:
+        """Parse entry text into company, job title and descriptions using NLP."""
+        company = ''
+        job_title = ''
+        descriptions = []
+        
+        try:
+            # Clean and process text with NLP
+            cleaned_text = self.clean_text(text)
+            doc = self.nlp_hu(cleaned_text)
+            
+            # First try NER for company names
+            for ent in doc.ents:
+                if ent.label_ == 'ORG':
+                    company = self.clean_text(ent.text)
+                    break
+            
+            # Try to identify job title using dependency parsing
+            for token in doc:
+                # Look for noun phrases that could be job titles
+                if token.pos_ == 'NOUN' and any(x in token.text.lower() for x in self.job_indicators):
+                    # Get the full noun phrase by looking at token's children
+                    phrase = []
+                    for t in token.subtree:
+                        # Only include relevant parts of speech
+                        if t.pos_ in ['NOUN', 'ADJ', 'PROPN']:
+                            phrase.append(t.text)
+                    if phrase:
+                        potential_title = self.clean_text(' '.join(phrase))
+                        if len(potential_title.split()) <= 5:  # Keep reasonable length
+                            job_title = potential_title
+                            break
+            
+            # Extract descriptions using sentence boundaries
+            for sent in doc.sents:
+                sent_text = self.clean_text(sent.text)
+                if (sent_text and 
+                    sent_text not in [company, job_title] and
+                    len(sent_text.split()) > 3):
+                    descriptions.append(sent_text)
+            
+        except Exception as e:
+            logging.warning(f"NLP parsing failed: {str(e)}")
+            pass
+        
+        return company, job_title, descriptions
 
     def _validate_section_data(self, lines: List[str]) -> bool:
         """Validate if the section data is sufficient for processing."""
         return len(lines) > 0
 
     def _extract_work_experience_fallback(self, text: str) -> List[Dict]:
-        """Fallback method to extract work experience using existing logic."""
+        """Fallback method to extract work experience using NLP."""
         if not text:
             return []
 
@@ -282,93 +372,104 @@ class ExperienceExtractorHu:
         current_entry = None
 
         try:
-            # Use regex for initial section extraction instead of NLP
-            work_pattern = r'(?:MUNKATAPASZTALAT|SZAKMAI\s*TAPASZTALAT|TAPASZTALAT).*?(?=\n\s*(?:TANULMÁNYOK|KÉSZSÉGEK|PROJEKTEK|NYELVEK|$))'
+            # Modified pattern to be more flexible
+            work_pattern = r'(?:MUNKATAPASZTALAT|SZAKMAI\s*TAPASZTALAT|TAPASZTALAT)[\s:]*.*?(?=\n\s*(?:TANULMÁNYOK|KÉPZETTSÉG|VÉGZETTSÉG|KÉPESSÉGEK|KÉSZSÉGEK|PROJEKTEK|NYELVEK|EGYÉB|$))'
+            
+            # Try to find experience section
             work_match = re.search(work_pattern, text, re.DOTALL | re.IGNORECASE)
             
             if not work_match:
-                return self.fallback_extract_descriptions(text)
-
-            # Process the matched work section
-            work_text = work_match.group(0)
-            lines = [self.clean_text(line.strip()) for line in work_text.split('\n') if line.strip()]
-            
-            for i, line in enumerate(lines):
-                # Skip section headers
-                if re.match(r'(?:MUNKATAPASZTALAT|SZAKMAI\s*TAPASZTALAT|TAPASZTALAT)', line, re.IGNORECASE):
-                    continue
-
-                try:
-                    # Use regex-based date extraction first
-                    date = None
-                    for pattern in self.date_patterns:
-                        date_match = re.search(pattern, line)
-                        if date_match:
-                            date = date_match.group(0)
-                            break
-                    
-                    if date:
-                        # Save previous entry if exists
-                        if current_entry and current_entry.get('descriptions'):
-                            work_data.append(current_entry)
-                        
-                        # Start new entry
-                        current_entry = {
-                            'company': '',
-                            'job_title': '',
-                            'date': date,
-                            'descriptions': []
-                        }
-                        
-                        # Look back a few lines for company and job title
-                        for j in range(max(0, i-2), i):
-                            prev_line = lines[j].strip()
-                            if not prev_line:
-                                continue
-
-                            # Use pattern matching instead of NLP
-                            if not current_entry['job_title']:
-                                # Check for job title patterns
-                                if any(indicator in prev_line.lower() for indicator in self.job_indicators):
-                                    current_entry['job_title'] = prev_line
-                                    continue
-                                    
-                            if not current_entry['company']:
-                                # Check for company patterns
-                                if (any(indicator in prev_line.lower() for indicator in self.company_indicators) or
-                                    re.search(r'\b(?:Kft|Zrt|Bt|Nyrt)\b', prev_line, re.IGNORECASE)):
-                                    current_entry['company'] = prev_line
-                                    continue
-                    
-                    elif current_entry:
-                        # Process current line
-                        if not current_entry['company']:
-                            # Check for company patterns
-                            if (any(indicator in line.lower() for indicator in self.company_indicators) or
-                                re.search(r'\b(?:Kft|Zrt|Bt|Nyrt)\b', line, re.IGNORECASE)):
-                                current_entry['company'] = line
-                                continue
-                                
-                        if not current_entry['job_title']:
-                            # Check for job title patterns
-                            if any(indicator in line.lower() for indicator in self.job_indicators):
-                                current_entry['job_title'] = line
-                                continue
-                        
-                        # If line doesn't match company or job patterns, add as description
-                        current_entry['descriptions'].append(line)
+                # Existing date-based fallback...
+                date_pattern = r'(?:19|20)\d{2}\s*[-–]\s*(?:(?:19|20)\d{2}|jelenleg|most|\?|…|\.{3})|(?:19|20)\d{2}\s*[-–]|(?:19|20)\d{2}'
+                dates = re.finditer(date_pattern, text)
+                date_positions = [m.start() for m in dates]
                 
-                except Exception as entry_error:
-                    logging.warning(f"Warning: Entry processing failed: {str(entry_error)}")
-                    continue
+                if date_positions:
+                    # Take text from first date to end or next major section
+                    start_pos = max(0, date_positions[0] - 100)  # Include some context before date
+                    work_text = text[start_pos:]
+                else:
+                    return []
+            else:
+                work_text = work_match.group(0)
 
-            # Add the last entry if it exists
-            if current_entry and current_entry.get('descriptions'):
-                work_data.append(current_entry)
+            # Rest of the processing remains the same...
+            work_text = self.clean_text(work_text)
+            doc = self.nlp_hu(work_text)
+            
+            # Group text into entries using dates as markers
+            entries = []
+            current_text = []
+            
+            for sent in doc.sents:
+                sent_text = self.clean_text(sent.text)
+                if self._extract_date(sent_text):
+                    if current_text:
+                        entries.append('\n'.join(current_text))
+                    current_text = [sent_text]
+                else:
+                    current_text.append(sent_text)
+            
+            if current_text:
+                entries.append('\n'.join(current_text))
+
+            # Process each entry
+            for entry_text in entries:
+                entry_doc = self.nlp_hu(entry_text)
+                
+                # Extract date
+                date = self._extract_date(entry_text)
+                if not date:
+                    continue
+                    
+                # Initialize entry
+                current_entry = {
+                    'company': '',
+                    'job_title': '',
+                    'date': date,
+                    'descriptions': []
+                }
+
+                # Use dependency parsing to find main clauses
+                main_clauses = []
+                for sent in entry_doc.sents:
+                    for token in sent:
+                        if token.dep_ == 'ROOT':
+                            clause = ' '.join([t.text for t in token.subtree])
+                            if clause not in main_clauses:
+                                main_clauses.append(clause)
+
+                # Look for organizations and job titles
+                for ent in entry_doc.ents:
+                    if ent.label_ == 'ORG' and not current_entry['company']:
+                        current_entry['company'] = self.clean_text(ent.text)
+
+                for token in entry_doc:
+                    if token.pos_ == 'NOUN' and any(x in token.text.lower() for x in self.job_indicators):
+                        phrase = []
+                        for t in token.subtree:
+                            if t.pos_ in ['NOUN', 'ADJ', 'PROPN']:
+                                phrase.append(t.text)
+                        if phrase:
+                            potential_title = self.clean_text(' '.join(phrase))
+                            if len(potential_title.split()) <= 5:
+                                current_entry['job_title'] = potential_title
+                                break
+
+                # Add remaining text as descriptions
+                for clause in main_clauses:
+                    cleaned = self.clean_text(clause)
+                    if (cleaned and 
+                        cleaned not in [current_entry['company'], current_entry['job_title']] and
+                        len(cleaned.split()) > 3):
+                        current_entry['descriptions'].append(cleaned)
+
+                if current_entry['company'] or current_entry['job_title']:
+                    work_data.append(current_entry)
 
         except Exception as e:
-            logging.warning(f"Warning: Work experience extraction failed: {str(e)}")
-            return self.fallback_extract_descriptions(text)
+            logging.warning(f"Fallback extraction failed: {str(e)}")
+            return []
 
         return work_data
 
