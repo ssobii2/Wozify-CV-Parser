@@ -23,7 +23,6 @@ h11==0.14.0
 html5lib==1.1
 httpcore==1.0.6
 httpx==0.27.2
-hu_core_news_lg @ https://huggingface.co/huspacy/hu_core_news_lg/resolve/main/hu_core_news_lg-any-py3-none-any.whl#sha256=803471467921b9db7e77c48ac7bdf9a57c08949427a9dd957a1655cbbdf65adc
 hu_core_news_md @ https://huggingface.co/huspacy/hu_core_news_md/resolve/main/hu_core_news_md-any-py3-none-any.whl#sha256=0fd89c6ccf0efe1d7591910065c3bec4eadb1e25313d6ceea551150832b0f861
 huggingface-hub==0.26.2
 huspacy==0.12.1
@@ -80,9 +79,6 @@ sympy==1.13.1
 thinc==8.3.3
 tinycss2==1.4.0
 tokenizers==0.20.3
-torch==2.5.1+cu118
-torchaudio==2.5.1+cu118
-torchvision==0.20.1+cu118
 tqdm==4.66.6
 transformers==4.46.3
 typer==0.9.4

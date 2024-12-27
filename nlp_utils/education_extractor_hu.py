@@ -1,6 +1,7 @@
 import re
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Tuple
 import spacy
+import logging
 
 class EducationExtractorHu:
     def __init__(self, nlp_hu):
@@ -10,13 +11,18 @@ class EducationExtractorHu:
         ]
         
         self.DEGREES = [
-            'Mérnök', 'Diploma', 'Technikus', 'Érettségi', 'Szakképzés', 'BSc', 'MSc'
+            'Mérnök', 'Diploma', 'Technikus', 'Érettségi', 'Szakképzés', 
+            'BSc', 'MSc', 'PhD', 'BA', 'MA', 'Dr.', 'Doktor',
+            'Szakmérnök', 'Üzemmérnök', 'Okleveles', 'Felsőfokú', 'Középfokú',
+            'Bizonyítvány', 'Tanúsítvány', 'Képesítés'
         ]
 
         self.DEGREE_FIELDS = [
             'Informatika', 'Programtervező', 'Gazdasági', 'Műszaki', 'Gépész', 'Villamos',
             'Közgazdász', 'Matematika', 'Fizika', 'Kémia', 'Biológia', 'Környezetvédelem',
-            'Kommunikáció', 'Marketing', 'Menedzsment', 'Logisztika', 'Turizmus'
+            'Kommunikáció', 'Marketing', 'Menedzsment', 'Logisztika', 'Turizmus',
+            'Jog', 'Jogász', 'Mérnök informatikus', 'Programozó', 'Rendszergazda',
+            'Szoftverfejlesztő', 'Frontend fejlesztő', 'Backend fejlesztő', 'Full stack'
         ]
 
         self.NON_EDUCATION_KEYWORDS = [
@@ -146,104 +152,108 @@ class EducationExtractorHu:
 
     def extract_education(self, text: str, parsed_sections: Optional[Dict] = None) -> List[Dict]:
         """Extract education information from text."""
-        education_data = []
-        current_entry = None
-
-        # Try to use parsed sections first if available
-        if parsed_sections and parsed_sections.get('education'):
-            education_lines = []
-            for section in parsed_sections['education']:
-                education_lines.extend([self.clean_text(line.strip()) for line in section.split('\n') if line.strip()])
-
-            if education_lines:
-                for line in education_lines:
-                    # Check if line contains a school name
-                    if self.has_school(line):
-                        if current_entry:
-                            education_data.append(current_entry)
-                        current_entry = {
-                            'school': line,
-                            'degree': '',
-                            'gpa': '',
-                            'date': '',
-                            'descriptions': []
-                        }
-                        continue
-
-                    if current_entry:
-                        # Extract date if present
-                        date = self.extract_date(line)
-                        if date and not current_entry['date']:
-                            current_entry['date'] = date
-                            continue
-
-                        # Extract degree if present
-                        if self.has_degree(line) and not current_entry['degree']:
-                            current_entry['degree'] = line
-                            continue
-
-                        # Extract GPA if present
-                        gpa = self.extract_gpa(line)
-                        if gpa and not current_entry['gpa']:
-                            current_entry['gpa'] = gpa
-                            continue
-
-                        # If none of the above, add as description
-                        if not self.is_non_education(line):
-                            current_entry['descriptions'].append(line)
-
-                if current_entry:
-                    education_data.append(current_entry)
-
+        try:
+            # Try main extraction first
+            if parsed_sections and 'education' in parsed_sections and parsed_sections['education']:
+                education_data = []
+                
+                # Process each education section
+                for section in parsed_sections['education']:
+                    # First clean the section text
+                    cleaned_section = self.clean_text(section)
+                    
+                    # Split into entries
+                    entries = self._split_into_entries(cleaned_section)
+                    
+                    # If no entries found, treat whole section as one entry
+                    if not entries:
+                        entries = [cleaned_section]
+                    
+                    # Process each entry
+                    for entry in entries:
+                        if entry.strip():
+                            school, degree, descriptions = self._parse_entry_parts(entry)
+                            date = self._extract_date(entry)
+                            
+                            # Create entry even if we only have partial information
+                            edu_entry = {
+                                'school': school.strip(),
+                                'degree': degree.strip(),
+                                'gpa': self.extract_gpa(entry) or '',
+                                'date': date.strip(),
+                                'descriptions': descriptions
+                            }
+                            # Only filter out completely empty entries
+                            if any([school, degree, date, descriptions]):
+                                education_data.append(edu_entry)
+                
+                # If main extraction returned empty results, try fallback
+                if not education_data:
+                    return self._extract_education_fallback(text)
+                
                 return education_data
 
-        # Fallback to direct extraction if no parsed sections or if parsing failed
-        return self._extract_education_fallback(text)
+            # If no parsed sections or empty education section, use fallback
+            return self._extract_education_fallback(text)
 
-    def _parse_education_entry(self, text: str) -> Dict:
-        """Parse a single education entry to extract school, degree, and date."""
-        entry = {
-            'school': '',
-            'degree': '',
-            'gpa': '',
-            'date': '',
-            'descriptions': []
-        }
+        except Exception as e:
+            logging.warning(f"Education extraction failed: {str(e)}, trying fallback")
+            return self._extract_education_fallback(text)
 
-        # Clean the text
-        text = self.clean_text(text)
-
-        # Extract date first (it's usually at the end in parentheses)
-        date_match = re.search(r'\((\d{4}(?:\s*[-–]\s*(?:\d{4}|jelen|folyamatban))?)\)', text)
-        if date_match:
-            entry['date'] = date_match.group(1)
-            # Remove the date from text to simplify further processing
-            text = text.replace(date_match.group(0), '').strip()
-        else:
-            # Try finding date without parentheses
-            date_match = re.search(r'\b(\d{4}\s*[-–]\s*(?:\d{4}|jelen|folyamatban)|\d{4})\b', text)
-            if date_match:
-                entry['date'] = date_match.group(1)
-                text = text.replace(date_match.group(1), '').strip()
-
-        # Split by dash if present
-        parts = [p.strip() for p in re.split(r'\s*-\s*', text) if p.strip()]
+    def _parse_entry_parts(self, text: str) -> Tuple[str, str, List[str]]:
+        """Parse entry text into school, degree and descriptions using NLP."""
+        school = ''
+        degree = ''
+        descriptions = []
         
-        if len(parts) >= 2:
-            # If we have multiple parts, assume degree - school format
-            entry['degree'] = parts[0]
-            entry['school'] = parts[1]
-        else:
-            # If no clear separation, try to identify if it's a school or degree
-            text = parts[0] if parts else text
-            if any(keyword.lower() in text.lower() for keyword in self.SCHOOLS):
-                entry['school'] = text
-            elif any(keyword.lower() in text.lower() for keyword in self.DEGREES):
-                entry['degree'] = text
-            else:
-                entry['school'] = text
+        try:
+            cleaned_text = self.clean_text(text)
+            doc = self.nlp_hu(cleaned_text)
+            
+            # Only use NER for school detection
+            for ent in doc.ents:
+                if ent.label_ == 'ORG':
+                    school = self.clean_text(ent.text)
+                    break
+            
+            # Extract degree using dependency parsing
+            remaining_text = cleaned_text.replace(school, '') if school else cleaned_text
+            remaining_doc = self.nlp_hu(remaining_text)
+            
+            # Look for degree keywords in noun phrases
+            for token in remaining_doc:
+                if token.pos_ == 'NOUN' and any(keyword.lower() in token.text.lower() 
+                    for keyword in self.DEGREES + self.DEGREE_FIELDS):
+                    # Get the full noun phrase containing the degree
+                    phrase = []
+                    for t in token.subtree:
+                        if t.pos_ in ['NOUN', 'ADJ', 'PROPN']:
+                            phrase.append(t.text)
+                    if phrase:
+                        potential_degree = self.clean_text(' '.join(phrase))
+                        if len(potential_degree.split()) <= 6:
+                            degree = potential_degree
+                            break
+            
+            # Get descriptions from remaining text
+            desc_text = remaining_text
+            if degree:
+                desc_text = desc_text.replace(degree, '')
+            
+            # Split into sentences and filter meaningful ones
+            for sent in doc.sents:
+                sent_text = self.clean_text(sent.text)
+                if (sent_text and 
+                    sent_text not in [school, degree] and
+                    len(sent_text.split()) > 2 and  # Reduced minimum length
+                    not any(keyword.lower() in sent_text.lower() 
+                           for keyword in self.NON_EDUCATION_KEYWORDS)):
+                    descriptions.append(sent_text)
 
-        return entry
+        except Exception as e:
+            logging.warning(f"NLP parsing failed: {str(e)}")
+            
+        return school, degree, descriptions
 
     def _extract_education_fallback(self, text: str) -> List[Dict]:
         """Fallback method to extract education information."""
@@ -253,21 +263,34 @@ class EducationExtractorHu:
         education_data = []
         
         try:
+            # First try to find education section with more keywords
+            edu_pattern = r'(?:TANULMÁNYOK|VÉGZETTSÉG|KÉPZETTSÉG|ISKOLAI\s*VÉGZETTSÉG|KÉPESÍTÉS|OKTATÁS|TANULMÁNYI\s*ADATOK|ISKOLÁK)[\s:]*.*?(?=\n\s*(?:MUNKATAPASZTALAT|SZAKMAI\s*TAPASZTALAT|TAPASZTALAT|KÉSZSÉGEK|NYELVTUDÁS|EGYÉB|MUNKAHELYEK|$))'
+            edu_match = re.search(edu_pattern, text, re.DOTALL | re.IGNORECASE)
+            
+            text_to_process = edu_match.group(0) if edu_match else text
+
             # Split text into lines and clean them
-            lines = [self.clean_text(line) for line in text.split('\n') if line.strip()]
+            lines = [self.clean_text(line) for line in text_to_process.split('\n') if line.strip()]
             education_entries = []
             current_entry = []
 
             for line in lines:
-                # Skip non-education related lines
-                if any(keyword.lower() in line.lower() for keyword in 
-                    ['nyelvtudás', 'számítógépes', 'windows', 'ms office', 'készségek', 
-                     'érdeklődési', 'erősségek', 'egyéb ismeretek']):
+                # Skip non-education related lines with more strict filtering
+                if self.is_non_education(line) or len(line.split()) < 2:
                     continue
 
-                # Check if it's a new entry
-                if (any(keyword.lower() in line.lower() for keyword in self.SCHOOLS + self.DEGREES) or
-                    re.search(r'\b\d{4}\b', line)):
+                doc = self.nlp_hu(line)
+                
+                # Enhanced new entry detection
+                is_new_entry = (
+                    self.has_school(line) or
+                    self.has_degree(line) or
+                    self.has_degree_field(line) or
+                    bool(re.search(r'\b(?:19|20)\d{2}\b', line)) or
+                    any(ent.label_ == 'ORG' for ent in doc.ents)
+                )
+
+                if is_new_entry and len(line.split()) > 2:
                     if current_entry:
                         education_entries.append(' '.join(current_entry))
                         current_entry = []
@@ -281,15 +304,96 @@ class EducationExtractorHu:
 
             # Process each education entry
             for entry_text in education_entries:
-                entry = self._parse_education_entry(entry_text)
-                if entry['school'] or entry['degree']:
-                    # Skip entries that are clearly not education-related
-                    if not any(keyword.lower() in entry['school'].lower() for keyword in 
-                             ['backend', 'frontend', 'sql', 'docker', 'git', 'office']):
-                        education_data.append(entry)
+                school, degree, descriptions = self._parse_entry_parts(entry_text)
+                date = self._extract_date(entry_text)
+                
+                # Try to extract school/degree from descriptions if missing
+                if not school and not degree and descriptions:
+                    for desc in descriptions:
+                        if self.has_school(desc):
+                            school = desc
+                            descriptions.remove(desc)
+                            break
+                        elif self.has_degree(desc):
+                            degree = desc
+                            descriptions.remove(desc)
+                            break
+
+                # Only add entry if it has meaningful information
+                if any([school, degree, descriptions]):
+                    edu_entry = {
+                        'school': school.strip(),
+                        'degree': degree.strip(),
+                        'gpa': self.extract_gpa(entry_text) or '',
+                        'date': date.strip(),
+                        'descriptions': descriptions
+                    }
+                    education_data.append(edu_entry)
 
         except Exception as e:
-            print(f"Warning: Education extraction failed: {str(e)}")
+            logging.warning(f"Education fallback extraction failed: {str(e)}")
             return []
 
         return education_data
+
+    def _split_into_entries(self, text: str) -> List[str]:
+        """Split text into education entries."""
+        entries = []
+        
+        # Clean text
+        cleaned_text = self.clean_text(text)
+        
+        # Try different splitting approaches
+        split_methods = [
+            # Method 1: Split by pipe
+            lambda t: [p.strip() for p in t.split('|') if p.strip()],
+            
+            # Method 2: Split by year patterns
+            lambda t: [p.strip() for p in re.split(r'(?=\b(?:19|20)\d{2}[-–]|(?:19|20)\d{2}\b)', t) if p.strip()],
+            
+            # Method 3: Split by school keywords with capitalization
+            lambda t: [p.strip() for p in re.split(r'(?=[A-ZÉÍÓÖŐÚÜŰ][^.!?]*(?:egyetem|főiskola|iskola|intézet|akadémia))', t, flags=re.IGNORECASE) if p.strip()],
+            
+            # Method 4: Split by bullet points and similar markers
+            lambda t: [p.strip() for p in re.split(r'\s*[•■⚫●]\s*', t) if p.strip()]
+        ]
+        
+        # Try each splitting method until we find entries
+        for split_method in split_methods:
+            potential_entries = split_method(cleaned_text)
+            
+            if potential_entries:
+                for entry in potential_entries:
+                    doc = self.nlp_hu(entry)
+                    
+                    # Verify entry has education-related content
+                    has_school = any(keyword.lower() in entry.lower() 
+                                   for keyword in self.SCHOOLS + ['egyetem', 'főiskola', 'iskola', 'intézet'])
+                    has_org = any(ent.label_ == 'ORG' for ent in doc.ents)
+                    has_degree = any(keyword.lower() in entry.lower() 
+                                   for keyword in self.DEGREES + self.DEGREE_FIELDS)
+                    has_date = bool(re.search(r'\b(?:19|20)\d{2}\b', entry))
+                    
+                    if (has_school or has_org) or (has_degree and has_date):
+                        entries.append(entry)
+                
+                if entries:
+                    break
+        
+        # If no entries found, return original text as single entry
+        if not entries:
+            entries = [cleaned_text]
+        
+        return entries
+
+    def _clean_entry_text(self, text: str, date: str) -> str:
+        """Clean entry text by removing date and unnecessary characters."""
+        text = text.replace(date, '').strip()
+        text = re.sub(r'\s+', ' ', text)
+        return text
+
+    def _extract_date(self, text: str) -> str:
+        """Extract date from text."""
+        year_pattern = r'(?:19|20)\d{2}\s*[-–]\s*(?:(?:19|20)\d{2}|jelenleg|most|\?|…|\.{3})|(?:19|20)\d{2}\s*[-–]|(?:19|20)\d{2}'
+        match = re.search(year_pattern, text)
+        return match.group(0) if match else ''
