@@ -17,20 +17,26 @@ class CurrentPositionExtractor:
             'executive', 'founder', 'head', 'chief', 'president', 'principal',
             'full-stack', 'frontend', 'backend', 'software', 'web', 'mobile',
             'data', 'system', 'network', 'cloud', 'devops', 'qa', 'test',
-            # Hungarian job indicators
+            # Enhanced Hungarian job indicators
             'fejlesztő', 'mérnök', 'vezető', 'tanácsadó', 'elemző',
             'szakértő', 'koordinátor', 'asszisztens', 'igazgató',
-            'gyakornok', 'tanuló', 'adminisztrátor', 'felügyelő', 'szenior', 'junior',
+            'gyakornok', 'adminisztrátor', 'felügyelő', 'szenior', 'junior',
             'architekt', 'tervező', 'programozó', 'technikus', 'tisztviselő',
-            'ügyvezető', 'alapító', 'vezérigazgató', 'elnök'
+            'ügyvezető', 'alapító', 'vezérigazgató', 'elnök', 'főmérnök',
+            'projektmenedzser', 'csoportvezető', 'osztályvezető', 'részlegvezető',
+            'alkalmazás', 'rendszer', 'hálózati', 'adatbázis', 'minőségbiztosítási',
+            'szoftverfejlesztő', 'webfejlesztő', 'mobilfejlesztő', 'full-stack fejlesztő',
+            'frontend fejlesztő', 'backend fejlesztő', 'rendszergazda', 'üzemeltető',
+            'informatikus', 'műszaki', 'technológiai', 'kutató', 'oktató'
         ]
         
         # Current position indicators
         self.current_indicators = [
             # English
             'present', 'current', 'now', 'ongoing', 'to date',
-            # Hungarian
-            'jelenlegi', 'jelenleg', 'mostani', 'folyamatban'
+            # Enhanced Hungarian indicators
+            'jelenlegi', 'jelenleg', 'mostani', 'folyamatban', 'napjainkig',
+            'mai napig', 'jelen', 'aktuális', 'folyó', '-', '–'  # Hungarian often uses dashes for current positions
         ]
 
     def get_nlp_model_for_text(self, text: str):
@@ -85,10 +91,15 @@ class CurrentPositionExtractor:
             # Sort experiences by date, with current positions first
             def get_date_score(job):
                 date = job.get('date', '')
-                date_range = job.get('date_range', '')  # Also check date_range field
+                date_range = job.get('date_range', '')
                 
                 # First check if this is a current position
-                if any(indicator.lower() in (date + date_range).lower() for indicator in self.current_indicators):
+                date_text = (date + date_range).lower()
+                if any(indicator.lower() in date_text for indicator in self.current_indicators):
+                    return (float('inf'), float('inf'), date)
+                
+                # Handle Hungarian date formats
+                if re.search(r'\b\d{4}\.\s*-\s*(jelenleg|napjainkig|folyamatban)', date_text):
                     return (float('inf'), float('inf'), date)
                 
                 # Then try to parse the date

@@ -124,73 +124,74 @@ class LanguageExtractor:
         languages = []
         found_languages = set()
         
-        # Try to use parsed sections first if available
-        if parsed_sections and parsed_sections.get('languages'):
-            languages_text = ' '.join(parsed_sections['languages'])
-            if languages_text.strip():
-                # Process each known language
-                for eng_name, hun_name in self.known_languages.items():
-                    if eng_name not in found_languages and (
-                        eng_name in languages_text.lower() or 
-                        hun_name.lower() in languages_text.lower()
-                    ):
-                        # Find proficiency if available
-                        sentences = languages_text.split('.')
-                        proficiency = ''
+        try:
+            # Try to use parsed sections first if available
+            if parsed_sections and parsed_sections.get('languages'):
+                languages_text = ' '.join(parsed_sections['languages'])
+                if languages_text.strip():
+                    # Split into individual language entries
+                    entries = re.split(r'[,;]\s*|(?<=\w)\s*[-–]\s*(?=[A-ZÁÉÍÓÖŐÚÜŰ])', languages_text)
+                    
+                    for entry in entries:
+                        entry = entry.strip()
+                        if not entry:
+                            continue
+                            
+                        # Look for language name
+                        found_lang = None
+                        found_prof = None
                         
-                        for sentence in sentences:
-                            if eng_name in sentence.lower() or hun_name.lower() in sentence.lower():
-                                # Look for structured format first (Language - Level)
-                                matches = re.findall(
-                                    rf'({re.escape(eng_name)}|{re.escape(hun_name)})\s*[-–:]\s*([^\.]+)',
-                                    sentence,
-                                    re.IGNORECASE
-                                )
-                                if matches:
-                                    proficiency = matches[0][1].strip()
-                                    break
+                        for eng_name, hun_name in self.known_languages.items():
+                            if eng_name in entry.lower() or hun_name.lower() in entry.lower():
+                                found_lang = eng_name
+                                # Get text after the language name
+                                prof_text = entry[entry.lower().find(hun_name.lower()) + len(hun_name):] if hun_name.lower() in entry.lower() \
+                                    else entry[entry.lower().find(eng_name.lower()) + len(eng_name):]
                                 
-                                # If no structured format, try to find any proficiency info
-                                words = sentence.split()
-                                lang_idx = -1
-                                for idx, word in enumerate(words):
-                                    if eng_name in word.lower() or hun_name.lower() in word.lower():
-                                        lang_idx = idx
+                                # Clean up proficiency text
+                                prof_text = prof_text.strip(' -–:,.')
+                                
+                                # Extract proficiency level
+                                for level in self.proficiency_levels:
+                                    if level.lower() in prof_text.lower():
+                                        found_prof = level
                                         break
+                                        
+                                # Look for CEFR levels
+                                cefr_match = re.search(r'\b(A1|A2|B1|B2|C1|C2)\b', prof_text, re.IGNORECASE)
+                                if cefr_match:
+                                    found_prof = cefr_match.group(1).upper()
                                 
-                                if lang_idx >= 0 and lang_idx < len(words) - 1:
-                                    # Take the next few words as potential proficiency
-                                    proficiency = ' '.join(words[lang_idx + 1:min(lang_idx + 4, len(words))])
-                                    proficiency = re.sub(r'[,\(\)]', '', proficiency).strip()
+                                break
                         
-                        # Add language even if no proficiency found
-                        languages.append({
-                            'language': eng_name.title(),
-                            'proficiency': proficiency.lower() if proficiency else ''
-                        })
-                        found_languages.add(eng_name)
-                
-                # If we found languages in the parsed section, return them
-                if languages:
-                    return languages
-        
-        # Fallback to processing entire text if no languages found in parsed sections
-        if not languages:
-            section_lines = self.extract_section(text, self.section_headers['languages'])
-            if section_lines:
-                section_text = ' '.join(section_lines)
-                # Use the same flexible matching logic for the fallback
-                for eng_name, hun_name in self.known_languages.items():
-                    if eng_name not in found_languages and (
-                        eng_name in section_text.lower() or 
-                        hun_name.lower() in section_text.lower()
-                    ):
-                        proficiency = self._find_closest_proficiency(section_text, eng_name, hun_name)
-                        languages.append({
-                            'language': eng_name.title(),
-                            'proficiency': proficiency.lower() if proficiency else ''
-                        })
-                        found_languages.add(eng_name)
+                        if found_lang and found_lang not in found_languages:
+                            languages.append({
+                                'language': found_lang.title(),
+                                'proficiency': found_prof.lower() if found_prof else ''
+                            })
+                            found_languages.add(found_lang)
+
+            # Fallback to processing entire text if no languages found
+            if not languages:
+                section_lines = self.extract_section(text, self.section_headers['languages'])
+                if section_lines:
+                    section_text = ' '.join(section_lines)
+                    # Use the same flexible matching logic for the fallback
+                    for eng_name, hun_name in self.known_languages.items():
+                        if eng_name not in found_languages and (
+                            eng_name in section_text.lower() or 
+                            hun_name.lower() in section_text.lower()
+                        ):
+                            proficiency = self._find_closest_proficiency(section_text, eng_name, hun_name)
+                            languages.append({
+                                'language': eng_name.title(),
+                                'proficiency': proficiency.lower() if proficiency else ''
+                            })
+                            found_languages.add(eng_name)
+
+        except Exception as e:
+            print(f"Error extracting languages: {str(e)}")
+            return [{'language': '', 'proficiency': ''}]
         
         return languages if languages else [{'language': '', 'proficiency': ''}]
 
@@ -262,3 +263,22 @@ class LanguageExtractor:
                         proficiency = level
                         break
         return proficiency
+
+    def _clean_proficiency(self, text: str) -> str:
+        """Clean up proficiency text and extract standardized level."""
+        # Remove common noise words and phrases
+        noise_words = [
+            'szint', 'szinten', 'szintű', 'nyelvtudás', 'nyelv', 'beszéd', 'írás', 'olvasás',
+            'kommunikáció', 'level', 'fokú', 'fok', 'vizsga', 'nyelvvizsga', 'komplex',
+            'alapfokú', 'középfokú', 'felsőfokú', 'társalgási', 'tárgyalási'
+        ]
+        
+        cleaned = text.lower()
+        for word in noise_words:
+            cleaned = re.sub(r'\b' + word + r'\b', '', cleaned, flags=re.IGNORECASE)
+        
+        # Remove extra whitespace and punctuation
+        cleaned = re.sub(r'\s+', ' ', cleaned)
+        cleaned = cleaned.strip(' ,-–:;.')
+        
+        return cleaned

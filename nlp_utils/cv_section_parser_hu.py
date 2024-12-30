@@ -5,6 +5,7 @@ import re
 import fasttext
 from pathlib import Path
 from langdetect import detect
+import time
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -364,64 +365,79 @@ class CVSectionParserHu:
             "references": []
         }
 
-        # Split text into lines and process
-        lines = text.split('\n')
-        current_section = None
-        current_content = []
-
-        for line in lines:
-            line = line.strip()
+        try:
+            # Preprocess text
+            text = self._preprocess_text(text)
+            lines = text.split('\n')
+            current_section = None
+            current_content = []
             
-            # Skip empty lines if no section is active
-            if not line and not current_section:
-                continue
-
-            # Check if line is a section header
-            if self._is_likely_new_section(line):
-                section = self._identify_section_header(line, set())
+            for line in lines:
+                line = line.strip()
                 
-                # If we found a valid section header
-                if section:
-                    # Save content from previous section if exists
-                    if current_section and current_content:
-                        content = self._clean_content('\n'.join(current_content))
-                        if content:
-                            sections[current_section].append(content)
-                    
-                    # Start new section
-                    current_section = section
-                    current_content = []
+                # Skip empty lines if no section is active
+                if not line and not current_section:
                     continue
 
-            # Add line to current section if we're in one
-            if current_section and line:
-                current_content.append(line)
+                # Check if line is a section header
+                if self._is_likely_new_section(line):
+                    section = self._identify_section_header(line, set())
+                    
+                    # If we found a valid section header
+                    if section:
+                        # Save content from previous section if exists
+                        if current_section and current_content:
+                            content = self._clean_content('\n'.join(current_content))
+                            if content:
+                                sections[current_section].append(content)
+                        
+                        # Start new section
+                        current_section = section
+                        current_content = []
+                        continue
 
-        # Don't forget to save the last section
-        if current_section and current_content:
-            content = self._clean_content('\n'.join(current_content))
-            if content:
-                sections[current_section].append(content)
+                # Add line to current section if we're in one
+                if current_section and line:
+                    current_content.append(line)
+
+            # Don't forget to save the last section
+            if current_section and current_content:
+                content = self._clean_content('\n'.join(current_content))
+                if content:
+                    sections[current_section].append(content)
+
+        except Exception as e:
+            logger.error(f"Error during CV parsing: {str(e)}")
+            return sections
 
         return sections
 
     def _preprocess_text(self, text: str) -> str:
-        """Preprocess text to handle two-column layouts."""
+        """Preprocess text to handle common formatting issues."""
+        if not text:
+            return ""
+        
+        # Basic cleanup
+        text = re.sub(r'\r', '\n', text)
+        text = re.sub(r'\n\s*\n\s*\n+', '\n\n', text)  # Normalize multiple newlines
+        text = re.sub(r'[^\S\n]+', ' ', text)  # Normalize spaces except newlines
+        
+        # Split into lines for processing
         lines = text.split('\n')
         processed_lines = []
         
         for line in lines:
-            if not line.strip():
-                processed_lines.append(line)
+            line = line.strip()
+            if not line:
+                processed_lines.append('')
                 continue
             
-            splits = re.split(r'\s{3,}|\t+', line)
-            if len(splits) > 1:
-                for split in splits:
-                    if split.strip():
-                        processed_lines.append(split.strip())
-            else:
-                processed_lines.append(line)
+            # Handle bullet points and list markers
+            line = re.sub(r'^[•\-●○▪◦→\*]\s*', '', line)
+            
+            # Clean up extra spaces
+            line = re.sub(r'\s+', ' ', line)
+            processed_lines.append(line)
         
         return '\n'.join(processed_lines)
 
