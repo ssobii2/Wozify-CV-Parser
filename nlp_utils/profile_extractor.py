@@ -68,10 +68,9 @@ class ProfileExtractor:
             nlp = self.get_nlp_model_for_text(text)
             doc = nlp(text)
             
-            # First try NER
+            # First try NER for PERSON entities
             for ent in doc.ents:
-                if ent.label_ == 'PERSON':
-                    # Validate the name - check it's not a metadata artifact
+                if ent.label_ == 'PER':
                     name = ent.text.strip()
                     if self._is_valid_name(name):
                         return name
@@ -138,31 +137,17 @@ class ProfileExtractor:
             nlp = self.get_nlp_model_for_text(text)
             doc = nlp(text)
             
-            # Common Hungarian cities and location indicators
-            hu_cities = {'budapest', 'debrecen', 'szeged', 'pécs', 'győr', 'nyíregyháza', 'miskolc'}
-            location_indicators = {'cím:', 'lakhely:', 'város:', 'address:', 'location:', 'city:'}
-            
-            # First try NER
+            # First try NER for LOC entities
             for ent in doc.ents:
-                if ent.label_ in {'GPE', 'LOC'}:
-                    return ent.text
+                if ent.label_ == 'LOC':
+                    return ent.text.strip()
             
-            # Fallback: Look for location indicators
-            lines = text.lower().split('\n')
-            for line in lines:
+            # Fallback: Try to find location in first few lines
+            lines = text.strip().split('\n')
+            for line in lines[:5]:  # Check first 5 lines
                 line = line.strip()
-                # Check for location indicators
-                if any(indicator in line for indicator in location_indicators):
-                    # Return everything after the indicator
-                    for indicator in location_indicators:
-                        if indicator in line:
-                            return line.split(indicator)[1].strip().title()
-                
-                # Check for known cities
-                words = set(re.findall(r'\w+', line.lower()))
-                for city in hu_cities:
-                    if city in words:
-                        return city.title()
+                if line and any(loc in line.lower() for loc in ['budapest', 'debrecen', 'szeged', 'hungary', 'magyarország']):
+                    return line
             
             return ""
         except Exception as e:
@@ -227,7 +212,7 @@ class ProfileExtractor:
         try:
             # Clean and join function for sections
             def clean_and_join(lines: List[str]) -> str:
-                # Filter out contact info, links, and short headers
+                # Filter out contact info and links
                 filtered_lines = []
                 for line in lines:
                     line = line.strip()
@@ -235,16 +220,7 @@ class ProfileExtractor:
                     if (re.search(r'[\w\.-]+@[\w\.-]+', line) or  # email
                         re.search(r'[\+\d\s\(\)-]{10,}', line) or  # phone
                         re.search(r'https?://', line) or           # urls
-                        len(line.split()) < 3 or                   # too short
-                        any(line.lower().startswith(word) for word in ['links', 'portfolio', 'github']) or
-                        # Education-related content
-                        any(word in line.lower() for word in [
-                            'coursework:', 'relevant coursework', 'additional coursework',
-                            'mathematics', 'engineering and systems:', 'database and information systems:',
-                            'programming and software development:', 'computer science foundations:',
-                            'miscellaneous technical skills:', 'cultural and language studies:',
-                            'physical education:'
-                        ])):
+                        len(line.split()) < 3):                    # too short
                         continue
                     filtered_lines.append(line)
                 return ' '.join(filtered_lines).strip()
@@ -253,7 +229,24 @@ class ProfileExtractor:
             if parsed_sections and parsed_sections.get('summary'):
                 summary_text = clean_and_join(parsed_sections['summary'])
                 if summary_text:
-                    return summary_text
+                    # Find where the actual summary ends
+                    lines = summary_text.split()
+                    summary_end_idx = len(lines)
+                    
+                    # Look for experience/work markers
+                    for i, word in enumerate(lines):
+                        if any(marker in word.lower() for marker in ['tapasztalat', 'munkahely', 'munka:']):
+                            next_words = ' '.join(lines[i:i+3])
+                            # Verify it's actually starting a work section
+                            if (re.search(r'\b(20\d{2}|19\d{2})\b', next_words) or  # Has year
+                                re.search(r'\b(kft|zrt|bt|nyrt)\b', next_words.lower()) or  # Has company type
+                                'munkahely' in next_words.lower()):
+                                summary_end_idx = i
+                                break
+                    
+                    return ' '.join(lines[:summary_end_idx])
+
+                return summary_text
 
             # 2. Second priority: Check parsed profile section
             if parsed_sections and parsed_sections.get('profile'):

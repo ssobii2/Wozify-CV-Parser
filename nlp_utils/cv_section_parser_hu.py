@@ -69,15 +69,18 @@ class CVSectionParserHu:
             r'(?i)(projekt|csapat|ügyfél|érdekelt|célkitűzés|cél)'  # Work-related terms
         ]
         
-        # Common section headers in CVs
+        # Common section headers in CVs - Adding more Hungarian variations and making patterns more flexible
         self.section_headers = {
             "summary": [
-                r"(?i)^(szakmai\s+összefoglaló|szakmai\s+összefoglalás)$",
-                r"(?i)^(összefoglaló|szakmai\s+célkitűzés|célkitűzések)$"
+                r"(?i)^(szakmai\s+összefoglaló|szakmai\s+összefoglalás)[\s:]*$",
+                r"(?i)^(összefoglaló|szakmai\s+célkitűzés|célkitűzések)[\s:]*$",
+                r"(?i)^(bemutatkozás|szakmai\s+bemutatkozás|rövid\s+bemutatkozás)[\s:]*$",
+                r"(?i)^(szakmai\s+háttér|szakmai\s+profil)[\s:]*$"
             ],
             "profile": [
-                r"(?i)^(profil|bemutatkozás|személyes\s+adatok|kapcsolat)$",
-                r"(?i)^(személyes\s+profil|elérhetőségek|kapcsolati\s+adatok)$"
+                r"(?i)^(profil|bemutatkozás|személyes\s+adatok|kapcsolat)[\s:]*$",
+                r"(?i)^(személyes\s+profil|elérhetőségek|kapcsolati\s+adatok)[\s:]*$",
+                r"(?i)^(személyes\s+információk?|alapadatok)[\s:]*$"
             ],
             "education": [
                 r"(?i)^(tanulmányok|oktatás|képzettség|végzettség)$",
@@ -123,36 +126,37 @@ class CVSectionParserHu:
             ]
         }
 
-        # Add section content indicators
+        # Update section content indicators for better content classification
         self.section_content_indicators = {
             "summary": {
                 "keywords": {
                     "év tapasztalat", "szakterület", "szakértelem", "specializáció",
-                    "háttér", "tapasztalattal rendelkezik"
+                    "háttér", "tapasztalattal rendelkezik", "fejlesztő", "mérnök",
+                    "szakember", "területen", "dolgozom", "foglalkozom"
                 },
                 "patterns": [
-                    r"(?i)(\d+\+?\s+év\s+tapasztalat)",
-                    r"(?i)(szakmai\s+tapasztalattal\s+rendelkezik)",
+                    r"(?i)(\d+\+?\s+év(es)?\s+([^.]*(fejleszt[őé]|tapasztalat)))",
+                    r"(?i)(szakmai\s+tapasztalattal\s+rendelkez[a-z]+)",
                     r"(?i)(szakterület[e|em].*(?:fejlesztés|programozás))",
-                    r"(?i)(háttér.*(?:fejlesztés|programozás))"
+                    r"(?i)(háttér.*(?:fejlesztés|programozás))",
+                    r"(?i)^[^.]{10,}(vagyok|dolgozom)\b"  # Starts with at least 10 chars followed by "vagyok/dolgozom"
                 ],
                 "negative_patterns": [
                     r"(?i)(@|tel:|telefon:|mobil:|cím:|email:)",
-                    r"(?i)(20\d{2}\s*[-–]\s*(20\d{2}|jelenleg))",
-                    r"(?i)(jan|feb|már|ápr|máj|jún|júl|aug|szep|okt|nov|dec)\s*\d{4}",
-                    r"(?i)(született|lakcím|telefonszám|születési)"
+                    r"(?i)(született|lakcím|telefonszám|születési)",
+                    r"(?i)(anyja\s+neve|állampolgárság|családi\s+állapot)",
+                    r"(?i)^[^.]{0,50}:\s*\+?\d"  # Short line with phone number
                 ]
             },
             "profile": {
                 "keywords": {
-                    "email", "telefon", "cím", "mobil", "linkedin", "github", "kapcsolat",
-                    "születés", "állampolgárság", "nem", "családi állapot", "jogosítvány"
+                    "név", "telefon", "email", "cím", "lakcím", "elérhetőség",
+                    "mobil", "születési", "állampolgárság"
                 },
                 "patterns": [
-                    r"(?i)([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})",
-                    r"(?i)(\+\d{1,2}[-\s]?\d{1,}[-\s]?\d{1,}[-\s]?\d{1,})",
-                    r"(?i)(linkedin\.com|github\.com)",
-                    r"(?i)(születési\s+idő|jogosítvány|családi\s+állapot)"
+                    r"(?i)(tel:|telefon:|mobil:|e-mail:|email:|cím:|lakcím:)",
+                    r"(?i)(született:|születési\s+hely:|születési\s+idő:)",
+                    r"(?i)(állampolgárság:|családi\s+állapot:)"
                 ]
             }
         }
@@ -344,12 +348,6 @@ class CVSectionParserHu:
         
         logger.info("Starting Hungarian CV parsing...")
 
-        # Store current text being processed
-        self.current_text = text
-
-        # Preprocess text
-        text = self._preprocess_text(text)
-        
         # Initialize sections
         sections = {
             "summary": [],
@@ -365,59 +363,43 @@ class CVSectionParserHu:
             "interests": [],
             "references": []
         }
-        
-        found_sections = set()
-        current_section = None
-        buffer = []
-        
-        # Process text line by line
-        lines = text.split('\n')
-        current_idx = 0
-        buffer = []
-        current_section = None
 
-        while current_idx < len(lines):
-            line = lines[current_idx].strip()
+        # Split text into lines and process
+        lines = text.split('\n')
+        current_section = None
+        current_content = []
+
+        for line in lines:
+            line = line.strip()
             
-            # Skip empty lines at the start
-            if not line and not current_section and not buffer:
-                current_idx += 1
+            # Skip empty lines if no section is active
+            if not line and not current_section:
                 continue
 
-            # Check for new section
+            # Check if line is a section header
             if self._is_likely_new_section(line):
-                section = self._identify_section_header(line, found_sections)
+                section = self._identify_section_header(line, set())
                 
+                # If we found a valid section header
                 if section:
-                    # Process previous section's content
-                    if current_section and buffer:
-                        content = self._clean_content('\n'.join(buffer))
+                    # Save content from previous section if exists
+                    if current_section and current_content:
+                        content = self._clean_content('\n'.join(current_content))
                         if content:
                             sections[current_section].append(content)
-                        buffer = []
                     
+                    # Start new section
                     current_section = section
-                    current_idx += 1
+                    current_content = []
                     continue
 
-            # Handle content
-            if current_section:
-                if line:
-                    buffer.append(line)
-            elif line:
-                # If no section identified yet, try to detect type
-                content = line.strip()
-                if content:
-                    detected_type = self._detect_section_content_type(content)
-                    current_section = detected_type
-                    found_sections.add(detected_type)
-                    buffer.append(line)
+            # Add line to current section if we're in one
+            if current_section and line:
+                current_content.append(line)
 
-            current_idx += 1
-
-        # Process final section
-        if current_section and buffer:
-            content = self._clean_content('\n'.join(buffer))
+        # Don't forget to save the last section
+        if current_section and current_content:
+            content = self._clean_content('\n'.join(current_content))
             if content:
                 sections[current_section].append(content)
 
@@ -446,48 +428,49 @@ class CVSectionParserHu:
     def _detect_section_content_type(self, text: str) -> str:
         """Determine if content is more likely to be summary or profile based on content analysis."""
         # First try model classification if available
-        model_prediction = None
         if self.model:
             predictions = self._classify_text_with_model(text)
             if predictions:
-                # Get the highest scoring prediction
                 section = max(predictions.items(), key=lambda x: x[1])[0]
                 confidence = max(predictions.values())
-                
-                # Only use model prediction for main sections with good confidence
-                if section in ['Summary', 'Profile', 'Experience', 'Education', 'Skills'] and confidence > 0.5:
+                if section in ['Summary', 'Profile'] and confidence > 0.5:
                     return section.lower()
         
-        # Fallback to pattern matching if model fails or is not available
+        # Enhanced pattern matching
         text_lower = text.lower()
         
         # Check for negative patterns first
         if any(re.search(pattern, text) for pattern in self.section_content_indicators["summary"]["negative_patterns"]):
             return "profile"
-            
-        # Count indicators for each section type
+        
+        # If text starts with typical profile information, classify as profile
+        first_line = text.split('\n')[0].strip().lower()
+        if any(keyword in first_line for keyword in self.section_content_indicators["profile"]["keywords"]):
+            return "profile"
+        
+        # Check for summary-like content at the start
+        if re.match(r"(?i)^[^.]{10,}(vagyok|dolgozom)\b", text):
+            return "summary"
+        
+        # Score-based classification
         summary_score = 0
         profile_score = 0
         
-        # Check keywords
-        summary_score += sum(1 for word in self.section_content_indicators["summary"]["keywords"] 
-                           if word in text_lower) * 2  # Give more weight to summary keywords
-        profile_score += sum(1 for word in self.section_content_indicators["profile"]["keywords"] 
-                           if word in text_lower) * 1.5
+        # Check keywords with weighted scoring
+        summary_score += sum(2 for word in self.section_content_indicators["summary"]["keywords"] 
+                            if word in text_lower)
+        profile_score += sum(1.5 for word in self.section_content_indicators["profile"]["keywords"] 
+                            if word in text_lower)
         
         # Check patterns
-        summary_score += sum(1 for pattern in self.section_content_indicators["summary"]["patterns"] 
-                           if re.search(pattern, text)) * 2
-        profile_score += sum(1 for pattern in self.section_content_indicators["profile"]["patterns"] 
-                           if re.search(pattern, text)) * 2
+        summary_score += sum(2 for pattern in self.section_content_indicators["summary"]["patterns"] 
+                            if re.search(pattern, text))
+        profile_score += sum(2 for pattern in self.section_content_indicators["profile"]["patterns"] 
+                            if re.search(pattern, text))
         
-        # Additional heuristics
-        if len(text.split()) > 30 and not any(re.search(pattern, text) 
+        # Length and content heuristics
+        if len(text.split()) > 20 and not any(re.search(pattern, text) 
             for pattern in self.section_content_indicators["summary"]["negative_patterns"]):
-            summary_score += 3  # Stronger bias for longer paragraphs without contact info
-            
-        # Check for experience-like content
-        if any(re.search(pattern, text) for pattern in self.experience_indicators):
-            summary_score -= 2
-            
+            summary_score += 3
+        
         return "summary" if summary_score > profile_score else "profile"
