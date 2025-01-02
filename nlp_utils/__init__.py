@@ -17,8 +17,8 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
 # Load spaCy models
-nlp_en = spacy.load('en_core_web_sm')
-nlp_hu = huspacy.load('hu_core_news_md')
+nlp_en = spacy.load('en_core_web_sm', disable=["textcat", "textcat_multilingual"])
+nlp_hu = huspacy.load('hu_core_news_md', disable=["textcat", "textcat_multilingual"])
 
 class CVExtractor:
     def __init__(self):

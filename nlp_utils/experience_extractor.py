@@ -204,7 +204,7 @@ class ExperienceExtractor:
 
         # Use spaCy's NER to find organization entities
         for ent in doc.ents:
-            if ent.label_ in {'ORG', 'GPE', 'PRODUCT'}:
+            if ent.label_ == 'ORG':
                 return True
 
         text_lower = text.lower()
@@ -387,26 +387,86 @@ class ExperienceExtractor:
         # Standardize spacing
         return ' '.join(text.split())
 
+    def _process_descriptions(self, descriptions: List[str], current_entry: Dict) -> List[str]:
+        """Process descriptions to extract any company names or job titles and clean the list."""
+        cleaned_descriptions = []
+        
+        for desc in descriptions:
+            doc = self.nlp(desc)
+            
+            # Check for organization entities
+            org_found = False
+            for ent in doc.ents:
+                if ent.label_ == 'ORG' and not current_entry['company']:
+                    current_entry['company'] = self._clean_text(ent.text)
+                    org_found = True
+                    # Remove the organization name from the description
+                    desc = desc.replace(ent.text, '').strip()
+            
+            # Check for job titles if we haven't found one yet
+            if not current_entry['job_title']:
+                for token in doc:
+                    if token.pos_ == 'NOUN' and any(x in token.text.lower() for x in self.job_indicators):
+                        phrase = []
+                        for t in token.subtree:
+                            if t.pos_ in ['NOUN', 'ADJ', 'PROPN']:
+                                phrase.append(t.text)
+                        if phrase:
+                            potential_title = self._clean_text(' '.join(phrase))
+                            if len(potential_title.split()) <= 5:
+                                current_entry['job_title'] = potential_title
+                                # Remove the job title from the description
+                                desc = desc.replace(' '.join(phrase), '').strip()
+            
+            # Only add the description if it's still meaningful after removals
+            if len(desc.split()) > 3 and self.is_relevant_description(desc):
+                cleaned_descriptions.append(desc)
+        
+        return cleaned_descriptions
+
     def _clean_work_data(self, work_data: List[Dict]) -> List[Dict]:
         """Clean and validate the extracted work experience data."""
         cleaned_data = []
+        date_entries = {}
+        
         for entry in work_data:
             if entry.get('descriptions'):
+                date = entry.get('date', '')
+                
+                # Process descriptions to extract any missed companies or job titles
+                descriptions = self._process_descriptions(entry['descriptions'], entry)
+                
                 # Remove duplicates while preserving order
                 seen = set()
-                entry['descriptions'] = [
-                    desc for desc in entry['descriptions']
+                descriptions = [
+                    desc for desc in descriptions
                     if desc and desc not in seen and not seen.add(desc)
                 ]
                 
-                # Only include entries with meaningful content
-                if entry['descriptions']:
-                    cleaned_data.append({
-                        'company': entry.get('company', ''),
-                        'job_title': entry.get('job_title', ''),
-                        'date': entry.get('date', ''),
-                        'descriptions': entry['descriptions']
-                    })
+                if descriptions:  # Only process if we have valid descriptions
+                    if date in date_entries:
+                        # Combine with existing entry
+                        existing = date_entries[date]
+                        # Use non-empty values from current entry if existing entry has empty values
+                        if not existing['company'] and entry.get('company'):
+                            existing['company'] = entry['company']
+                        if not existing['job_title'] and entry.get('job_title'):
+                            existing['job_title'] = entry['job_title']
+                        
+                        # Merge and clean descriptions
+                        all_descriptions = existing['descriptions'] + descriptions
+                        existing['descriptions'] = self._process_descriptions(all_descriptions, existing)
+                    else:
+                        # Create new entry
+                        date_entries[date] = {
+                            'company': entry.get('company', ''),
+                            'job_title': entry.get('job_title', ''),
+                            'date': date,
+                            'descriptions': descriptions
+                        }
+        
+        # Convert dictionary back to list
+        cleaned_data = list(date_entries.values())
         
         return cleaned_data
 
