@@ -1,3 +1,4 @@
+# Import extractors
 from .profile_extractor import ProfileExtractor
 from .education_extractor import EducationExtractor
 from .education_extractor_hu import EducationExtractorHu
@@ -9,12 +10,14 @@ from .current_position_extractor import CurrentPositionExtractor
 from .cv_section_parser import CVSectionParser
 from .cv_section_parser_hu import CVSectionParserHu
 
+# Standard library imports
 import re
+from typing import Dict, List, Optional
+
+# Third-party imports
 import spacy
 import huspacy
 from langdetect import detect
-from datetime import datetime
-from typing import Dict, List, Optional, Tuple
 
 # Load spaCy models
 nlp_en = spacy.load('en_core_web_sm', disable=["textcat", "textcat_multilingual"])
@@ -22,6 +25,8 @@ nlp_hu = huspacy.load('hu_core_news_md', disable=["textcat", "textcat_multilingu
 
 class CVExtractor:
     def __init__(self):
+        """Initialize CVExtractor with all necessary extractors and parsers."""
+        # Initialize extractors
         self.profile_extractor = ProfileExtractor(nlp_en, nlp_hu)
         self.education_extractor = EducationExtractor(nlp_en)
         self.education_extractor_hu = EducationExtractorHu(nlp_hu)
@@ -33,7 +38,7 @@ class CVExtractor:
         self.section_parser = CVSectionParser()
         self.section_parser_hu = CVSectionParserHu()
         
-        # Define date patterns for date extraction
+        # Date extraction patterns
         self.date_patterns = [
             r'(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|'
             r'Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|'
@@ -51,17 +56,122 @@ class CVExtractor:
             'languages': ['language', 'languages', 'language skills', 'nyelvtudás', 'nyelvek'],
         }
 
-        self._cached_sections = {}  # Add this line to store parsed sections
-        self._section_cache = {}  # Add cache for parsed sections
+        # Cache for parsed sections
+        self._cached_sections = {}
+        self._section_cache = {}
 
+    # MAIN EXTRACTION METHODS
+    def extract_entities(self, text: str) -> Dict:
+        """Main method to extract all information from CV."""
+        try:
+            language = detect(text)
+        except:
+            language = 'en'
+        
+        _ = self._get_parsed_sections(text)
+        nlp_model = self.get_nlp_model_for_text(text)
+        doc = self.safe_nlp_process(text, nlp_model)
+        
+        profile_data = self.profile_extractor.extract_profile(text)
+        current_position = self.extract_current_position(text)
+        education = self.extract_education(text)
+        experience = self.extract_work_experience(text)
+        skills = self.extract_skills(text)
+        languages = self.extract_languages(text)
+        
+        self._cached_sections.clear()
+        
+        return {
+            "language": language,
+            "profile": profile_data,
+            "current_position": current_position,
+            "education": education,
+            "experience": experience,
+            "skills": skills,
+            "languages": languages
+        }
+
+    def extract_work_experience(self, text: str) -> List[Dict]:
+        """Extract detailed work experience information using the appropriate ExperienceExtractor."""
+        try:
+            language = detect(text)
+            parsed_sections = self._get_parsed_sections(text)
+            experience_sections = parsed_sections.get('experience') if parsed_sections else None
+            parsed_data = {'experience': experience_sections} if experience_sections else None
+
+            if language == 'hu':
+                return self.experience_extractor_hu.extract_work_experience(text, parsed_data)
+            else:
+                return self.experience_extractor.extract_work_experience(text, parsed_data)
+
+        except Exception as e:
+            print(f"Error extracting work experience: {str(e)}")
+            return []
+
+    def extract_current_position(self, text: str) -> Optional[str]:
+        """Extract the most recent job title using CurrentPositionExtractor."""
+        work_experience = self.extract_work_experience(text)
+        return self.current_position_extractor.extract_current_position(text, work_experience)
+
+    def extract_education(self, text: str) -> List[Dict]:
+        """Extract education information from text."""
+        try:
+            language = detect(text)
+            parsed_sections = self._get_parsed_sections(text)
+            
+            if language == 'hu':
+                return self.education_extractor_hu.extract_education(text, parsed_sections)
+            else:
+                return self.education_extractor.extract_education(text, parsed_sections)
+                
+        except Exception as e:
+            print(f"Warning: Education extraction failed: {str(e)}")
+            return []
+
+    def extract_skills(self, text: str) -> List[str]:
+        """Extract skills from text using SkillsExtractor."""
+        try:
+            parsed_sections = self._get_parsed_sections(text)
+            return self.skills_extractor.extract_skills(text, parsed_sections)
+            
+        except Exception as e:
+            print(f"Error extracting skills: {str(e)}")
+            return []
+
+    def extract_languages(self, text: str) -> List[Dict[str, str]]:
+        """Extract languages and their proficiency levels using LanguageExtractor."""
+        try:
+            parsed_sections = self._get_parsed_sections(text)
+            return self.language_extractor.extract_languages(text, parsed_sections)
+            
+        except Exception as e:
+            print(f"Error extracting languages: {str(e)}")
+            return [{'language': '', 'proficiency': ''}]
+
+    def extract_profile(self, text: str) -> Dict[str, str]:
+        """Extract profile information using ProfileExtractor."""
+        try:
+            parsed_sections = self._get_parsed_sections(text)
+            return self.profile_extractor.extract_profile(text, parsed_sections)
+            
+        except Exception as e:
+            print(f"Error extracting profile: {str(e)}")
+            return {
+                'name': "",
+                'email': "",
+                'phone': "",
+                'location': "",
+                'url': "",
+                'summary': ""
+            }
+
+    # HELPER METHODS
     def _get_parsed_sections(self, text: str) -> Dict[str, List[str]]:
         """Get or create parsed sections for the given text."""
-        # Use cached sections if available
         text_hash = hash(text)
         if text_hash in self._section_cache:
             return self._section_cache[text_hash]
 
-        # Detect language and use appropriate parser
         try:
             language = detect(text)
             if language == 'hu':
@@ -69,7 +179,6 @@ class CVExtractor:
             else:
                 parsed_sections = self.section_parser.parse_sections(text)
         except:
-            # Fallback to English parser if language detection fails
             parsed_sections = self.section_parser.parse_sections(text)
 
         self._section_cache[text_hash] = parsed_sections
@@ -80,13 +189,10 @@ class CVExtractor:
         try:
             language = detect(text)
             if language == 'hu':
-                # For Hungarian text, first try to clean it
                 cleaned_text = text.encode('utf-8', errors='ignore').decode('utf-8')
-                # If the text contains many Hungarian-specific characters, use Hungarian model
                 hungarian_chars = set('áéíóöőúüűÁÉÍÓÖŐÚÜŰ')
                 if any(c in hungarian_chars for c in cleaned_text):
                     try:
-                        # Try processing a small sample first
                         sample = cleaned_text[:100]
                         _ = nlp_hu(sample)
                         return nlp_hu
@@ -101,11 +207,9 @@ class CVExtractor:
     def safe_nlp_process(self, text: str, nlp_model):
         """Safely process text with NLP model, handling potential vocabulary issues."""
         try:
-            # First try processing the whole text
             return nlp_model(text)
         except Exception as e:
             if "Can't retrieve string for hash" in str(e):
-                # If vocabulary error occurs, try processing sentence by sentence
                 sentences = text.split('.')
                 processed_docs = []
                 for sentence in sentences:
@@ -117,11 +221,9 @@ class CVExtractor:
                         print(f"Warning: Skipping sentence due to error: {str(sent_error)}")
                         continue
 
-                # Combine the successfully processed sentences
                 if processed_docs:
                     return processed_docs[0].doc.from_docs(processed_docs)
 
-            # If all else fails, return a basic processed version
             return nlp_en(text)
 
     def extract_dates(self, text: str) -> List[str]:
@@ -149,7 +251,6 @@ class CVExtractor:
                     current_entry = []
                 continue
 
-            # Check if this line is a section header
             if any(keyword in line.lower() for keyword in section_keywords):
                 in_section = True
                 continue
@@ -174,132 +275,7 @@ class CVExtractor:
 
         return content
 
-    def extract_entities(self, text: str) -> Dict:
-        """Main method to extract all information from CV."""
-        try:
-            language = detect(text)
-        except:
-            language = 'en'
-        
-        # Parse sections once at the start
-        _ = self._get_parsed_sections(text)
-        
-        # Get appropriate NLP model
-        nlp_model = self.get_nlp_model_for_text(text)
-        
-        # Process text with NLP model
-        doc = self.safe_nlp_process(text, nlp_model)
-        
-        # Extract all information
-        profile_data = self.profile_extractor.extract_profile(text)
-        current_position = self.extract_current_position(text)
-        education = self.extract_education(text)
-        experience = self.extract_work_experience(text)
-        skills = self.extract_skills(text)
-        languages = self.extract_languages(text)
-        
-        # Clear the cache after processing
-        self._cached_sections.clear()
-        
-        # Return extracted data with language information
-        return {
-            "language": language,
-            "profile": profile_data,
-            "current_position": current_position,
-            "education": education,
-            "experience": experience,
-            "skills": skills,
-            "languages": languages
-        }
-
-    def extract_work_experience(self, text: str) -> List[Dict]:
-        """Extract detailed work experience information using the appropriate ExperienceExtractor."""
-        try:
-            language = detect(text)
-            parsed_sections = self._get_parsed_sections(text)
-            
-            # Only pass the experience section if it exists
-            experience_sections = parsed_sections.get('experience') if parsed_sections else None
-            parsed_data = {'experience': experience_sections} if experience_sections else None
-
-            if language == 'hu':
-                # Use Hungarian experience extractor
-                return self.experience_extractor_hu.extract_work_experience(text, parsed_data)
-            else:
-                # Use English experience extractor
-                return self.experience_extractor.extract_work_experience(text, parsed_data)
-
-        except Exception as e:
-            print(f"Error extracting work experience: {str(e)}")
-            return []
-
-    def extract_current_position(self, text: str) -> Optional[str]:
-        """Extract the most recent job title using CurrentPositionExtractor."""
-        work_experience = self.extract_work_experience(text)
-        return self.current_position_extractor.extract_current_position(text, work_experience)
-
-    def extract_education(self, text: str) -> List[Dict]:
-        """Extract education information from text."""
-        try:
-            language = detect(text)
-            parsed_sections = self._get_parsed_sections(text)
-            
-            if language == 'hu':
-                return self.education_extractor_hu.extract_education(text, parsed_sections)
-            else:
-                # For English, pass parsed sections to the education extractor
-                return self.education_extractor.extract_education(text, parsed_sections)
-                
-        except Exception as e:
-            print(f"Warning: Education extraction failed: {str(e)}")
-            return []
-
-    def extract_skills(self, text: str) -> List[str]:
-        """Extract skills from text using SkillsExtractor."""
-        try:
-            # Get parsed sections from cache or parse new
-            parsed_sections = self._get_parsed_sections(text)
-            
-            # Pass parsed sections to skills extractor
-            return self.skills_extractor.extract_skills(text, parsed_sections)
-            
-        except Exception as e:
-            print(f"Error extracting skills: {str(e)}")
-            return []
-
-    def extract_languages(self, text: str) -> List[Dict[str, str]]:
-        """Extract languages and their proficiency levels using LanguageExtractor."""
-        try:
-            # Get parsed sections from cache or parse new
-            parsed_sections = self._get_parsed_sections(text)
-            
-            # Pass parsed sections to language extractor
-            return self.language_extractor.extract_languages(text, parsed_sections)
-            
-        except Exception as e:
-            print(f"Error extracting languages: {str(e)}")
-            return [{'language': '', 'proficiency': ''}]
-
-    def extract_profile(self, text: str) -> Dict[str, str]:
-        """Extract profile information using ProfileExtractor."""
-        try:
-            # Get parsed sections from cache or parse new
-            parsed_sections = self._get_parsed_sections(text)
-            
-            # Pass parsed sections to profile extractor
-            return self.profile_extractor.extract_profile(text, parsed_sections)
-            
-        except Exception as e:
-            print(f"Error extracting profile: {str(e)}")
-            return {
-                'name': "",
-                'email': "",
-                'phone': "",
-                'location': "",
-                'url': "",
-                'summary': ""
-            }
-
+# Define public exports
 __all__ = [
     'ProfileExtractor', 'EducationExtractor', 'EducationExtractorHu', 'ExperienceExtractor', 'ExperienceExtractorHu',
     'SkillsExtractor', 'LanguageExtractor', 'CurrentPositionExtractor', 'CVExtractor'

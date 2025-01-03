@@ -1,12 +1,14 @@
 import re
 from typing import List, Optional, Dict
-import spacy
 from langdetect import detect, LangDetectException
 
 class SkillsExtractor:
     def __init__(self, nlp_en, nlp_hu):
+        """Initialize SkillsExtractor with spaCy models and define constants."""
         self.nlp_en = nlp_en
         self.nlp_hu = nlp_hu
+        
+        # Section headers for identifying skills sections
         self.section_headers = {
             'skills': [
                 'skills', 'technical skills', 'competencies', 'expertise', 'technologies',
@@ -21,7 +23,7 @@ class SkillsExtractor:
             ]
         }
         
-        # List of skills to extract (keeping in English since technical terms are usually in English)
+        # List of predefined skills
         self.skills = [
             'python', 'java', 'javascript', 'c++', 'c#', 'ruby', 'php', 'swift',
             'kotlin', 'go', 'rust', 'typescript', 'scala', 'perl', 'r',
@@ -35,7 +37,6 @@ class SkillsExtractor:
             'postman', 'webpack', 'npm', 'yarn', 'html5', '.net', 'ios', 'android',
             'google', 'ui/ux', 'adobe', 'figma', 'prisma', 'web3', 'express', 'linux',
             'macos', 'windows', 'laravel',
-            # Additional skills
             'data analysis', 'machine learning', 'artificial intelligence', 'big data',
             'data visualization', 'business intelligence', 'cybersecurity', 'networking',
             'devops', 'agile', 'scrum', 'kanban', 'project management', 'quality assurance',
@@ -50,13 +51,122 @@ class SkillsExtractor:
             'hungarian', 'angol', 'német', 'francia', 'spanyol', 'olasz', 'portugál', 'orosz'
         ]
 
-    def get_nlp_model_for_text(self, text: str):
-        """Determine the language of the text and return the appropriate spaCy NLP model."""
+    # MAIN EXTRACTION METHODS
+    def extract_skills(self, text: str, parsed_sections: Optional[Dict] = None) -> List[str]:
+        """Extract skills from text using both predefined lists and NLP analysis."""
+        skills = set()
+        
         try:
-            language = detect(text)
-            return self.nlp_hu if language == 'hu' else self.nlp_en
-        except LangDetectException:
-            return self.nlp_en
+            if parsed_sections and 'skills' in parsed_sections and parsed_sections['skills']:
+                for skills_text in parsed_sections['skills']:
+                    if not skills_text.strip():
+                        continue
+                        
+                    for skill in self.skills:
+                        skill_variations = [
+                            skill,
+                            skill + 'js',
+                            skill + '.js',
+                            skill.replace('javascript', 'js'),
+                            skill.replace('typescript', 'ts'),
+                            skill.capitalize(),
+                            skill.upper(),
+                        ]
+                        
+                        for variation in skill_variations:
+                            if re.search(r'\b' + re.escape(variation) + r'\b', skills_text, re.IGNORECASE):
+                                normalized_skill = self.normalize_skill(skill)
+                                skills.add(normalized_skill)
+                                break
+                    
+                    nlp = self.get_nlp_model_for_text(skills_text)
+                    doc = nlp(skills_text)
+                    
+                    if nlp.meta['lang'] == 'hu':
+                        for phrase in self.extract_noun_phrases(doc):
+                            potential_skill = phrase.text.strip()
+                            
+                            if len(potential_skill.split()) > 3 or len(potential_skill) < 2:
+                                continue
+                            
+                            if potential_skill.lower() in {'skills', 'experience', 'years', 'knowledge', 'proficiency', 'expert'}:
+                                continue
+                            
+                            if self._is_likely_technical_skill(potential_skill):
+                                normalized_skill = self.normalize_skill(potential_skill)
+                                skills.add(normalized_skill)
+                    else:
+                        for chunk in doc.noun_chunks:
+                            potential_skill = chunk.text.strip()
+                            
+                            if len(potential_skill.split()) > 3 or len(potential_skill) < 2:
+                                continue
+                            
+                            if potential_skill.lower() in {'skills', 'experience', 'years', 'knowledge', 'proficiency', 'expert'}:
+                                continue
+                            
+                            if self._is_likely_technical_skill(potential_skill):
+                                normalized_skill = self.normalize_skill(potential_skill)
+                                skills.add(normalized_skill)
+
+        except Exception as e:
+            print(f"Error extracting skills: {str(e)}")
+            if parsed_sections and 'skills' in parsed_sections:
+                for skills_text in parsed_sections['skills']:
+                    for skill in self.skills:
+                        if re.search(r'\b' + re.escape(skill) + r'\b', skills_text, re.IGNORECASE):
+                            normalized_skill = self.normalize_skill(skill)
+                            skills.add(normalized_skill)
+        
+        if not skills:
+            lines = text.split('\n')
+            in_skills_section = False
+            skills_text = []
+            
+            skill_indicators = [
+                r'(?i)^(szakmai\s+ismeretek|technikai\s+ismeretek)',
+                r'(?i)^(programozási\s+nyelvek|fejlesztői\s+eszközök)',
+                r'(?i)^(informatikai\s+ismeretek|számítógépes\s+ismeretek)',
+                r'(?i)^(egyéb\s+ismeretek|speciális\s+ismeretek)',
+                r'(?i)^(használt\s+technológiák|ismert\s+technológiák)'
+            ]
+            
+            for line in lines:
+                line = line.strip()
+                
+                if any(re.match(pattern, line) for pattern in skill_indicators):
+                    in_skills_section = True
+                    continue
+                
+                if in_skills_section and (
+                    any(header in line.lower() for header in ['tapasztalat', 'tanulmányok', 'nyelvtudás', 'referenciák']) or
+                    re.match(r'^[A-ZÁÉÍÓÖŐÚÜŰ].*:', line)
+                ):
+                    in_skills_section = False
+                
+                if in_skills_section and line:
+                    skills_text.append(line)
+            
+            if skills_text:
+                skills_content = ' '.join(skills_text)
+                nlp = self.get_nlp_model_for_text(skills_content)
+                doc = nlp(skills_content)
+                
+                for skill in self.skills:
+                    if re.search(r'\b' + re.escape(skill) + r'\b', skills_content, re.IGNORECASE):
+                        normalized_skill = self.normalize_skill(skill)
+                        skills.add(normalized_skill)
+                
+                if nlp.meta['lang'] == 'hu':
+                    for token in doc:
+                        if (token.pos_ in ['NOUN', 'PROPN'] and 
+                            not token.is_stop and 
+                            len(token.text) > 2 and
+                            self._is_likely_technical_skill(token.text)):
+                            normalized_skill = self.normalize_skill(token.text)
+                            skills.add(normalized_skill)
+
+        return sorted(skills)
 
     def extract_section(self, text: str, section_keywords: List[str]) -> List[str]:
         """Extract a section from text based on keywords."""
@@ -67,14 +177,11 @@ class SkillsExtractor:
         for i, line in enumerate(lines):
             line = line.strip()
             
-            # Skip empty lines
             if not line:
                 continue
             
-            # Check if this line contains a section header
             is_section_header = any(keyword in line.lower() for keyword in section_keywords)
             
-            # Check if next line is a different section
             is_next_different_section = False
             if i < len(lines) - 1:
                 next_line = lines[i + 1].strip()
@@ -95,274 +202,35 @@ class SkillsExtractor:
         
         return section_lines
 
-    def normalize_skill(self, skill: str) -> str:
-        """Normalize skill names to prevent duplicates."""
-        skill = skill.lower()
-        # Remove .js suffix if present
-        if skill.endswith('.js'):
-            skill = skill[:-3]
-        # Remove js suffix if present
-        if skill.endswith('js') and not skill == 'js':
-            skill = skill[:-2]
-        # Handle special cases
-        skill_mapping = {
-            # JavaScript frameworks/libraries
-            'node': 'Node.js',
-            'nodejs': 'Node.js',
-            'express': 'Express.js',
-            'expressjs': 'Express.js',
-            'react': 'React.js',
-            'reactjs': 'React.js',
-            'next': 'Next.js',
-            'nextjs': 'Next.js',
-            'vue': 'Vue.js',
-            'vuejs': 'Vue.js',
-            'angular': 'Angular.js',
-            'angularjs': 'Angular.js',
-            'svelte': 'Svelte',
-            'sveltejs': 'Svelte',
-            
-            # Programming languages
-            'javascript': 'JavaScript',
-            'typescript': 'TypeScript',
-            'python': 'Python',
-            'java': 'Java',
-            'c++': 'C++',
-            'cpp': 'C++',
-            'c#': 'C#',
-            'csharp': 'C#',
-            'php': 'PHP',
-            'ruby': 'Ruby',
-            'swift': 'Swift',
-            'go': 'Go',
-            
-            # Databases
-            'postgresql': 'PostgreSQL',
-            'postgres': 'PostgreSQL',
-            'mysql': 'MySQL',
-            'mongodb': 'MongoDB',
-            'mongo': 'MongoDB',
-            'sqlite': 'SQLite',
-            'cassandra': 'Cassandra',
-            
-            # Web technologies
-            'html': 'HTML',
-            'html5': 'HTML',
-            'css': 'CSS',
-            'css3': 'CSS',
-            'sass': 'SASS',
-            'scss': 'SASS',
-            'tailwind': 'Tailwind CSS',
-            'tailwindcss': 'Tailwind CSS',
-            'bootstrap': 'Bootstrap',
-            'jquery': 'jQuery',
-            
-            # Tools and platforms
-            'git': 'Git',
-            'github': 'GitHub',
-            'gitlab': 'GitLab',
-            'docker': 'Docker',
-            'kubernetes': 'Kubernetes',
-            'k8s': 'Kubernetes',
-            'aws': 'AWS',
-            'azure': 'Azure',
-            'gcp': 'GCP',
-            'vscode': 'VS Code',
-            'visualstudio': 'Visual Studio',
-            'heroku': 'Heroku',
-            'netlify': 'Netlify',
-            
-            # Design tools
-            'figma': 'Figma',
-            'adobe': 'Adobe',
-            'photoshop': 'Adobe Photoshop',
-            'illustrator': 'Adobe Illustrator',
-            'xd': 'Adobe XD',
-            
-            # Microsoft tools
-            'excel': 'Microsoft Excel',
-            'word': 'Microsoft Word',
-            'powerpoint': 'Microsoft PowerPoint',
-            'msoffice': 'Microsoft Office',
-            'office': 'Microsoft Office',
-            
-            # Operating systems
-            'linux': 'Linux',
-            'windows': 'Windows',
-            'macos': 'macOS',
-            'mac': 'macOS',
-            'ubuntu': 'Ubuntu',
-            'debian': 'Debian',
-        }
-        
-        # Try to get from mapping, fallback to capitalized version
-        normalized = skill_mapping.get(skill)
-        if normalized:
-            return normalized
-        
-        # Handle remaining cases
-        words = skill.split()
-        return ' '.join(word.capitalize() for word in words)
-
-    def extract_skills(self, text: str, parsed_sections: Optional[Dict] = None) -> List[str]:
-        """Extract skills from text using both predefined lists and NLP analysis."""
-        skills = set()
-        
+    # HELPER METHODS
+    def get_nlp_model_for_text(self, text: str):
+        """Determine the language of the text and return the appropriate spaCy NLP model."""
         try:
-            # Try to use parsed sections first if available
-            if parsed_sections and 'skills' in parsed_sections and parsed_sections['skills']:
-                for skills_text in parsed_sections['skills']:
-                    if not skills_text.strip():
-                        continue
-                        
-                    # First get skills from predefined list
-                    for skill in self.skills:
-                        # Create variations of the skill name to match common formats
-                        skill_variations = [
-                            skill,  # normal: react
-                            skill + 'js',  # reactjs
-                            skill + '.js',  # react.js
-                            skill.replace('javascript', 'js'),  # javascript -> js
-                            skill.replace('typescript', 'ts'),  # typescript -> ts
-                            skill.capitalize(),  # React
-                            skill.upper(),  # REACT
-                        ]
-                        
-                        for variation in skill_variations:
-                            if re.search(r'\b' + re.escape(variation) + r'\b', skills_text, re.IGNORECASE):
-                                normalized_skill = self.normalize_skill(skill)
-                                skills.add(normalized_skill)
-                                break
-                    
-                    # Then use NLP to find additional technical skills
-                    nlp = self.get_nlp_model_for_text(skills_text)
-                    doc = nlp(skills_text)
-                    
-                    # Look for noun phrases that might be technical skills
-                    if nlp.meta['lang'] == 'hu':
-                        for phrase in self.extract_noun_phrases(doc):
-                            potential_skill = phrase.text.strip()
-                            
-                            # Skip if too long or too short
-                            if len(potential_skill.split()) > 3 or len(potential_skill) < 2:
-                                continue
-                            
-                            # Skip common non-skill words
-                            if potential_skill.lower() in {'skills', 'experience', 'years', 'knowledge', 'proficiency', 'expert'}:
-                                continue
-                            
-                            # Look for technical skill patterns
-                            if self._is_likely_technical_skill(potential_skill):
-                                normalized_skill = self.normalize_skill(potential_skill)
-                                skills.add(normalized_skill)
-                    else:
-                        for chunk in doc.noun_chunks:
-                            potential_skill = chunk.text.strip()
-                            
-                            # Skip if too long or too short
-                            if len(potential_skill.split()) > 3 or len(potential_skill) < 2:
-                                continue
-                            
-                            # Skip common non-skill words
-                            if potential_skill.lower() in {'skills', 'experience', 'years', 'knowledge', 'proficiency', 'expert'}:
-                                continue
-                            
-                            # Look for technical skill patterns
-                            if self._is_likely_technical_skill(potential_skill):
-                                normalized_skill = self.normalize_skill(potential_skill)
-                                skills.add(normalized_skill)
-
-        except Exception as e:
-            print(f"Error extracting skills: {str(e)}")
-            # Fallback to basic skill extraction
-            if parsed_sections and 'skills' in parsed_sections:
-                for skills_text in parsed_sections['skills']:
-                    for skill in self.skills:
-                        if re.search(r'\b' + re.escape(skill) + r'\b', skills_text, re.IGNORECASE):
-                            normalized_skill = self.normalize_skill(skill)
-                            skills.add(normalized_skill)
-        
-        # If no skills found from parsed sections, try fallback extraction
-        if not skills:
-            # Split text into lines and look for skill sections
-            lines = text.split('\n')
-            in_skills_section = False
-            skills_text = []
-            
-            # Additional Hungarian skill section indicators
-            skill_indicators = [
-                r'(?i)^(szakmai\s+ismeretek|technikai\s+ismeretek)',
-                r'(?i)^(programozási\s+nyelvek|fejlesztői\s+eszközök)',
-                r'(?i)^(informatikai\s+ismeretek|számítógépes\s+ismeretek)',
-                r'(?i)^(egyéb\s+ismeretek|speciális\s+ismeretek)',
-                r'(?i)^(használt\s+technológiák|ismert\s+technológiák)'
-            ]
-            
-            for line in lines:
-                line = line.strip()
-                
-                # Check if line starts a skills section
-                if any(re.match(pattern, line) for pattern in skill_indicators):
-                    in_skills_section = True
-                    continue
-                
-                # Check if line ends skills section
-                if in_skills_section and (
-                    any(header in line.lower() for header in ['tapasztalat', 'tanulmányok', 'nyelvtudás', 'referenciák']) or
-                    re.match(r'^[A-ZÁÉÍÓÖŐÚÜŰ].*:', line)  # New section starting with capital letter and colon
-                ):
-                    in_skills_section = False
-                
-                if in_skills_section and line:
-                    skills_text.append(line)
-            
-            # Process collected skills text
-            if skills_text:
-                skills_content = ' '.join(skills_text)
-                nlp = self.get_nlp_model_for_text(skills_content)
-                doc = nlp(skills_content)
-                
-                # Extract skills using both predefined list and NLP
-                for skill in self.skills:
-                    if re.search(r'\b' + re.escape(skill) + r'\b', skills_content, re.IGNORECASE):
-                        normalized_skill = self.normalize_skill(skill)
-                        skills.add(normalized_skill)
-                
-                # Look for additional technical terms in Hungarian text
-                if nlp.meta['lang'] == 'hu':
-                    for token in doc:
-                        if (token.pos_ in ['NOUN', 'PROPN'] and 
-                            not token.is_stop and 
-                            len(token.text) > 2 and
-                            self._is_likely_technical_skill(token.text)):
-                            normalized_skill = self.normalize_skill(token.text)
-                            skills.add(normalized_skill)
-
-        return sorted(skills)
+            language = detect(text)
+            return self.nlp_hu if language == 'hu' else self.nlp_en
+        except LangDetectException:
+            return self.nlp_en
 
     def extract_noun_phrases(self, doc):
         """Custom method to extract noun phrases for Hungarian language."""
         noun_phrases = []
         for token in doc:
             if token.dep_ in {'nsubj', 'dobj', 'pobj'}:
-                # Convert subtree to span and get text
                 phrase = doc[token.left_edge.i : token.right_edge.i + 1]
                 noun_phrases.append(phrase)
         return noun_phrases
 
     def _is_likely_technical_skill(self, text: str) -> bool:
         """Check if the text is likely to be a technical skill."""
-        # Technical indicators
         tech_patterns = [
-            r'\b[A-Z]+\b',  # Uppercase words like SQL, CSS
-            r'\b[A-Za-z]+[\+\#]+\b',  # C++, C#
-            r'\b[A-Za-z]+\.?js\b',  # .js suffix
-            r'\b[A-Za-z]+\d+\b',  # Version numbers
-            r'[A-Z][a-z]+[A-Z][a-z]+',  # CamelCase
-            r'\b[A-Za-z]+[-\.][A-Za-z]+\b',  # Hyphenated or dotted
+            r'\b[A-Z]+\b',
+            r'\b[A-Za-z]+[\+\#]+\b',
+            r'\b[A-Za-z]+\.?js\b',
+            r'\b[A-Za-z]+\d+\b',
+            r'[A-Z][a-z]+[A-Z][a-z]+',
+            r'\b[A-Za-z]+[-\.][A-Za-z]+\b',
         ]
         
-        # Skip common English and Hungarian words and general terms that do not indicate specific skills or expertise
         common_words = {
             'the', 'and', 'or', 'in', 'at', 'by', 'for', 'with', 'about',
             'skills', 'years', 'experience', 'knowledge', 'advanced', 'intermediate',
@@ -379,15 +247,12 @@ class SkillsExtractor:
         
         text_lower = text.lower()
         
-        # Skip if it's a common word
         if text_lower in common_words:
             return False
         
-        # Check for technical patterns
         if any(re.search(pattern, text) for pattern in tech_patterns):
             return True
         
-        # Check for technical context in both English and Hungarian
         technical_context = {
             'framework', 'library', 'language', 'database', 'platform',
             'tool', 'sdk', 'api', 'stack', 'protocol', 'service',
@@ -397,99 +262,87 @@ class SkillsExtractor:
         
         return any(context in text_lower for context in technical_context)
 
-    # Add a dictionary for common skill abbreviations
+    # NORMALIZATION AND MAPPING METHODS
+    def normalize_skill(self, skill: str) -> str:
+        """Normalize skill names to prevent duplicates."""
+        skill = skill.lower()
+        
+        if skill.endswith('.js'):
+            skill = skill[:-3]
+        if skill.endswith('js') and not skill == 'js':
+            skill = skill[:-2]
+        
+        skill_mapping = {
+            'node': 'Node.js', 'nodejs': 'Node.js', 'express': 'Express.js',
+            'expressjs': 'Express.js', 'react': 'React.js', 'reactjs': 'React.js',
+            'next': 'Next.js', 'nextjs': 'Next.js', 'vue': 'Vue.js',
+            'vuejs': 'Vue.js', 'angular': 'Angular.js', 'angularjs': 'Angular.js',
+            'svelte': 'Svelte', 'sveltejs': 'Svelte',
+            'javascript': 'JavaScript', 'typescript': 'TypeScript', 'python': 'Python',
+            'java': 'Java', 'c++': 'C++', 'cpp': 'C++', 'c#': 'C#',
+            'csharp': 'C#', 'php': 'PHP', 'ruby': 'Ruby', 'swift': 'Swift',
+            'go': 'Go', 'postgresql': 'PostgreSQL', 'postgres': 'PostgreSQL',
+            'mysql': 'MySQL', 'mongodb': 'MongoDB', 'mongo': 'MongoDB',
+            'sqlite': 'SQLite', 'cassandra': 'Cassandra', 'html': 'HTML',
+            'html5': 'HTML', 'css': 'CSS', 'css3': 'CSS', 'sass': 'SASS',
+            'scss': 'SASS', 'tailwind': 'Tailwind CSS', 'tailwindcss': 'Tailwind CSS',
+            'bootstrap': 'Bootstrap', 'jquery': 'jQuery', 'git': 'Git',
+            'github': 'GitHub', 'gitlab': 'GitLab', 'docker': 'Docker',
+            'kubernetes': 'Kubernetes', 'k8s': 'Kubernetes', 'aws': 'AWS',
+            'azure': 'Azure', 'gcp': 'GCP', 'vscode': 'VS Code',
+            'visualstudio': 'Visual Studio', 'heroku': 'Heroku', 'netlify': 'Netlify',
+            'figma': 'Figma', 'adobe': 'Adobe', 'photoshop': 'Adobe Photoshop',
+            'illustrator': 'Adobe Illustrator', 'xd': 'Adobe XD',
+            'excel': 'Microsoft Excel', 'word': 'Microsoft Word',
+            'powerpoint': 'Microsoft PowerPoint', 'msoffice': 'Microsoft Office',
+            'office': 'Microsoft Office', 'linux': 'Linux', 'windows': 'Windows',
+            'macos': 'macOS', 'mac': 'macOS', 'ubuntu': 'Ubuntu', 'debian': 'Debian'
+        }
+        
+        normalized = skill_mapping.get(skill)
+        if normalized:
+            return normalized
+        
+        words = skill.split()
+        return ' '.join(word.capitalize() for word in words)
+
     @property
     def abbreviations(self):
+        """Return a mapping of skill names to their common abbreviations."""
         return {
-            'SQL': 'SQL',
-            'Java': 'Java',
-            'C++': 'C++',
-            'JavaScript': 'JS',
-            'Python': 'Py',
-            'HTML': 'HTML',
-            'HTML5': 'HTML5',
-            'CSS': 'CSS',
-            'PHP': 'PHP',
-            'C#': 'C#',
-            'Ruby': 'Ruby',
-            'Go': 'Go',
-            'Swift': 'Swift',
-            'Kotlin': 'Kotlin',
-            'Rust': 'Rust',
-            'TypeScript': 'TS',
-            'Scala': 'Scala',
-            'Perl': 'Perl',
-            'R': 'R',
-            'Django': 'Django',
-            'Flask': 'Flask',
-            'React': 'React',
-            'Angular': 'Angular',
-            'Vue': 'Vue',
-            'Node.js': 'Node',
-            'Docker': 'Docker',
-            'Kubernetes': 'K8s',
-            'AWS': 'AWS',
-            'Azure': 'Azure',
-            'GCP': 'GCP',
-            'Terraform': 'Terraform',
-            'Ansible': 'Ansible',
-            'Jenkins': 'Jenkins',
-            'Git': 'Git',
-            'GitLab': 'GitLab',
-            'CircleCI': 'CircleCI',
-            'PostgreSQL': 'PostgreSQL',
-            'MongoDB': 'MongoDB',
-            'MySQL': 'MySQL',
-            'SQLite': 'SQLite',
-            'Redis': 'Redis',
-            'Elasticsearch': 'Elasticsearch',
-            'Cassandra': 'Cassandra',
-            'DynamoDB': 'DynamoDB',
-            'iOS': 'iOS',
-            'Android': 'Android',
-            'Google': 'Google',
-            'Adobe': 'Adobe',
-            'Figma': 'Figma',
-            'UI/UX': 'UI/UX',
-            'Prisma': 'Prisma',
-            'Linux': 'Linux',
-            'Windows': 'Windows',
-            'MacOS': 'Mac OS',
-            'Laravel': 'Laravel',
-            'Web3': 'Web3',
-            'Web 3': 'Web3',
-            'SASS': 'SASS',
-            'SCSS': 'SASS',
-            'Firebase': 'Firebase',
-            'Heroku': 'Heroku',
-            'Netlify': 'Netlify',
+            'SQL': 'SQL', 'Java': 'Java', 'C++': 'C++', 'JavaScript': 'JS',
+            'Python': 'Py', 'HTML': 'HTML', 'HTML5': 'HTML5', 'CSS': 'CSS',
+            'PHP': 'PHP', 'C#': 'C#', 'Ruby': 'Ruby', 'Go': 'Go',
+            'Swift': 'Swift', 'Kotlin': 'Kotlin', 'Rust': 'Rust',
+            'TypeScript': 'TS', 'Scala': 'Scala', 'Perl': 'Perl', 'R': 'R',
+            'Django': 'Django', 'Flask': 'Flask', 'React': 'React',
+            'Angular': 'Angular', 'Vue': 'Vue', 'Node.js': 'Node',
+            'Docker': 'Docker', 'Kubernetes': 'K8s', 'AWS': 'AWS',
+            'Azure': 'Azure', 'GCP': 'GCP', 'Terraform': 'Terraform',
+            'Ansible': 'Ansible', 'Jenkins': 'Jenkins', 'Git': 'Git',
+            'GitLab': 'GitLab', 'CircleCI': 'CircleCI', 'PostgreSQL': 'PostgreSQL',
+            'MongoDB': 'MongoDB', 'MySQL': 'MySQL', 'SQLite': 'SQLite',
+            'Redis': 'Redis', 'Elasticsearch': 'Elasticsearch',
+            'Cassandra': 'Cassandra', 'DynamoDB': 'DynamoDB', 'iOS': 'iOS',
+            'Android': 'Android', 'Google': 'Google', 'Adobe': 'Adobe',
+            'Figma': 'Figma', 'UI/UX': 'UI/UX', 'Prisma': 'Prisma',
+            'Linux': 'Linux', 'Windows': 'Windows', 'MacOS': 'Mac OS',
+            'Laravel': 'Laravel', 'Web3': 'Web3', 'Web 3': 'Web3',
+            'SASS': 'SASS', 'SCSS': 'SASS', 'Firebase': 'Firebase',
+            'Heroku': 'Heroku', 'Netlify': 'Netlify',
             'DigitalOcean': 'Digital Ocean',
-            'Content Management Systems': 'CMS',
-            'WordPress': 'WordPress',
-            'Shopify': 'Shopify',
-            'Magento': 'Magento',
-            'SEO': 'SEO',
-            'SEM': 'SEM',
-            'Email Marketing': 'Email Marketing',
-            'Social Media': 'Social Media',
-            'Agile': 'Agile',
-            'Scrum': 'Scrum',
-            'Kanban': 'Kanban',
-            'DevOps': 'DevOps',
-            'Machine Learning': 'ML',
-            'Artificial Intelligence': 'AI',
-            'Data Analysis': 'Data Analysis',
-            'Business Intelligence': 'BI',
-            'Cybersecurity': 'Cybersecurity',
-            'Networking': 'Networking',
+            'Content Management Systems': 'CMS', 'WordPress': 'WordPress',
+            'Shopify': 'Shopify', 'Magento': 'Magento', 'SEO': 'SEO',
+            'SEM': 'SEM', 'Email Marketing': 'Email Marketing',
+            'Social Media': 'Social Media', 'Agile': 'Agile',
+            'Scrum': 'Scrum', 'Kanban': 'Kanban', 'DevOps': 'DevOps',
+            'Machine Learning': 'ML', 'Artificial Intelligence': 'AI',
+            'Data Analysis': 'Data Analysis', 'Business Intelligence': 'BI',
+            'Cybersecurity': 'Cybersecurity', 'Networking': 'Networking',
             'Virtualization': 'Virtualization',
-            'Cloud Computing': 'Cloud Computing',
-            'API Development': 'API Dev',
-            'Microservices': 'Microservices',
-            'GraphQL': 'GraphQL',
-            'RESTful Services': 'REST',
-            'Unit Testing': 'Unit Testing',
+            'Cloud Computing': 'Cloud Computing', 'API Development': 'API Dev',
+            'Microservices': 'Microservices', 'GraphQL': 'GraphQL',
+            'RESTful Services': 'REST', 'Unit Testing': 'Unit Testing',
             'Integration Testing': 'Integration Testing',
-            'Selenium': 'Selenium',
-            'Cucumber': 'Cucumber',
+            'Selenium': 'Selenium', 'Cucumber': 'Cucumber'
         }

@@ -1,14 +1,13 @@
 import re
 from typing import Dict, Optional, List
 from langdetect import detect, LangDetectException
-import spacy
 from spacy.matcher import Matcher
 
 class ProfileExtractor:
     def __init__(self, nlp_en, nlp_hu):
+        """Initialize ProfileExtractor with spaCy models and matchers."""
         self.nlp_en = nlp_en
         self.nlp_hu = nlp_hu
-        # Initialize matchers for both languages
         self.matcher_en = Matcher(nlp_en.vocab)
         self.matcher_hu = Matcher(nlp_hu.vocab)
         self.add_email_patterns()
@@ -27,6 +26,7 @@ class ProfileExtractor:
         except LangDetectException:
             return self.nlp_en
 
+    # MAIN EXTRACTION METHOD
     def extract_profile(self, text: str, parsed_sections: Optional[Dict] = None) -> Dict[str, str]:
         """Extract profile information using pattern matching and NLP."""
         profile_data = {
@@ -39,22 +39,14 @@ class ProfileExtractor:
         }
 
         try:
-            # Extract name and location using NER
-            profile_data['name'] = self.extract_name(text)
-            profile_data['location'] = self.extract_location(text)
-
-            # Process text with appropriate NLP model and Matcher
             nlp = self.get_nlp_model_for_text(text)
             doc = nlp(text)
 
-            # Extract email using the matcher
+            profile_data['name'] = self.extract_name(text)
+            profile_data['location'] = self.extract_location(text)
             profile_data['email'] = self.extract_email(doc)
-
-            # Extract phone and URL using regex
             profile_data['phone'] = self.extract_phone(text)
             profile_data['url'] = self.extract_url(text)
-
-            # Extract summary with parsed sections
             profile_data['summary'] = self.extract_summary(text, parsed_sections)
 
         except Exception as e:
@@ -62,25 +54,23 @@ class ProfileExtractor:
 
         return profile_data
 
+    # ENTITY EXTRACTION METHODS
     def extract_name(self, text: str) -> str:
         """Extract name using NER and additional validation."""
         try:
             nlp = self.get_nlp_model_for_text(text)
             doc = nlp(text)
             
-            # First try NER for PERSON entities
             for ent in doc.ents:
                 if ent.label_ == 'PER':
                     name = ent.text.strip()
                     if self._is_valid_name(name):
                         return name
             
-            # Fallback: Try to find name at the start of the document
             lines = text.strip().split('\n')
-            for line in lines[:3]:  # Check first 3 lines
+            for line in lines[:3]:
                 line = line.strip()
-                if line and len(line.split()) <= 4:  # Names are usually 1-4 words
-                    # Check if it looks like a name (capitalized words)
+                if line and len(line.split()) <= 4:
                     words = line.split()
                     if all(word[0].isupper() for word in words if word):
                         if self._is_valid_name(line):
@@ -91,60 +81,18 @@ class ProfileExtractor:
             print(f"Warning: Error extracting name: {str(e)}")
             return ""
 
-    def _is_valid_name(self, name: str) -> bool:
-        """Validate if the extracted text is likely a real name."""
-        # Skip if empty or too short
-        if not name or len(name) < 2:
-            return False
-        
-        # Skip common metadata patterns
-        invalid_patterns = [
-            r'^cid:',           # Common metadata prefix
-            r'^\d+$',          # Just numbers
-            r'^[a-f0-9]+$',    # Hexadecimal
-            r'^#',             # Starts with hash
-            r'^id:',           # ID prefix
-            r'^\[.*\]$',       # Square brackets
-            r'^<.*>$',         # Angle brackets
-            r'^\{.*\}$',       # Curly braces
-            r'^\d+[A-Za-z]+$'  # Number followed by letters
-        ]
-        
-        for pattern in invalid_patterns:
-            if re.match(pattern, name, re.IGNORECASE):
-                return False
-        
-        # Check for valid name characters
-        valid_name_pattern = r'^[A-Za-z\u00C0-\u017F\s\'-]+$'  # Letters, spaces, hyphens, apostrophes, and accented characters
-        if not re.match(valid_name_pattern, name):
-            return False
-        
-        # Additional validation for minimum word structure
-        words = name.split()
-        if len(words) < 1 or len(words) > 4:  # Names typically have 1-4 words
-            return False
-        
-        # Check each word is properly capitalized and long enough
-        for word in words:
-            if len(word) < 2 or not word[0].isupper():
-                return False
-        
-        return True
-
     def extract_location(self, text: str) -> str:
         """Extract location using NER."""
         try:
             nlp = self.get_nlp_model_for_text(text)
             doc = nlp(text)
             
-            # First try NER for LOC entities
             for ent in doc.ents:
-                if ent.label_ == 'LOC':
+                if ent.label_ in {'LOC', 'GPE', 'FAC'}:
                     return ent.text.strip()
             
-            # Fallback: Try to find location in first few lines
             lines = text.strip().split('\n')
-            for line in lines[:5]:  # Check first 5 lines
+            for line in lines[:5]:
                 line = line.strip()
                 if line and any(loc in line.lower() for loc in ['budapest', 'debrecen', 'szeged', 'hungary', 'magyarország']):
                     return line
@@ -154,18 +102,16 @@ class ProfileExtractor:
             print(f"Warning: Error extracting location: {str(e)}")
             return ""
 
+    # CONTACT INFORMATION EXTRACTION METHODS
     def extract_email(self, doc) -> str:
-        """Extract email using spaCy matcher."""
+        """Extract email using spaCy token attributes and regex fallback."""
         try:
-            # Try both matchers
-            matcher = self.matcher_hu if doc.vocab == self.nlp_hu.vocab else self.matcher_en
-            matches = matcher(doc)
+            # First try using spaCy's built-in email detection
+            for token in doc:
+                if token.like_email:
+                    return token.text
             
-            for match_id, start, end in matches:
-                if doc.vocab.strings[match_id] == "EMAIL":
-                    return doc[start:end].text
-            
-            # Fallback: Use regex
+            # Fallback to regex pattern
             email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
             email_match = re.search(email_pattern, doc.text)
             if email_match:
@@ -179,11 +125,10 @@ class ProfileExtractor:
     def extract_phone(self, text: str) -> str:
         """Extract phone number using regex."""
         try:
-            # Hungarian and international phone patterns
             phone_patterns = [
-                r'(?:\+36|06)[-\s]?(?:20|30|70|1)[-\s]?\d{3}[-\s]?\d{4}',  # Hungarian mobile
-                r'(?:\+36|06)[-\s]?\d{1}[-\s]?\d{3}[-\s]?\d{4}',  # Hungarian landline
-                r'(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}'  # International
+                r'(?:\+36|06)[-\s]?(?:20|30|70|1)[-\s]?\d{3}[-\s]?\d{4}',
+                r'(?:\+36|06)[-\s]?\d{1}[-\s]?\d{3}[-\s]?\d{4}',
+                r'(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}'
             ]
             
             for pattern in phone_patterns:
@@ -207,39 +152,69 @@ class ProfileExtractor:
             print(f"Warning: Error extracting URL: {str(e)}")
             return ""
 
+    # VALIDATION METHODS
+    def _is_valid_name(self, name: str) -> bool:
+        """Validate if the extracted text is likely a real name."""
+        if not name or len(name) < 2:
+            return False
+        
+        invalid_patterns = [
+            r'^cid:',
+            r'^\d+$',
+            r'^[a-f0-9]+$',
+            r'^#',
+            r'^id:',
+            r'^\[.*\]$',
+            r'^<.*>$',
+            r'^\{.*\}$',
+            r'^\d+[A-Za-z]+$'
+        ]
+        
+        for pattern in invalid_patterns:
+            if re.match(pattern, name, re.IGNORECASE):
+                return False
+        
+        valid_name_pattern = r'^[A-Za-z\u00C0-\u017F\s\'-]+$'
+        if not re.match(valid_name_pattern, name):
+            return False
+        
+        words = name.split()
+        if len(words) < 1 or len(words) > 4:
+            return False
+        
+        for word in words:
+            if len(word) < 2 or not word[0].isupper():
+                return False
+        
+        return True
+
+    # SUMMARY EXTRACTION METHOD
     def extract_summary(self, text: str, parsed_sections: Optional[Dict] = None) -> str:
         """Extract summary with priority: dedicated summary section > profile section > fallback."""
         try:
-            # Clean and join function for sections
             def clean_and_join(lines: List[str]) -> str:
-                # Filter out contact info and links
                 filtered_lines = []
                 for line in lines:
                     line = line.strip()
-                    # Skip if line contains:
-                    if (re.search(r'[\w\.-]+@[\w\.-]+', line) or  # email
-                        re.search(r'[\+\d\s\(\)-]{10,}', line) or  # phone
-                        re.search(r'https?://', line) or           # urls
-                        len(line.split()) < 3):                    # too short
+                    if (re.search(r'[\w\.-]+@[\w\.-]+', line) or
+                        re.search(r'[\+\d\s\(\)-]{10,}', line) or
+                        re.search(r'https?://', line) or
+                        len(line.split()) < 3):
                         continue
                     filtered_lines.append(line)
                 return ' '.join(filtered_lines).strip()
 
-            # 1. First priority: Check parsed summary section
             if parsed_sections and parsed_sections.get('summary'):
                 summary_text = clean_and_join(parsed_sections['summary'])
                 if summary_text:
-                    # Find where the actual summary ends
                     lines = summary_text.split()
                     summary_end_idx = len(lines)
                     
-                    # Look for experience/work markers
                     for i, word in enumerate(lines):
                         if any(marker in word.lower() for marker in ['tapasztalat', 'munkahely', 'munka:']):
                             next_words = ' '.join(lines[i:i+3])
-                            # Verify it's actually starting a work section
-                            if (re.search(r'\b(20\d{2}|19\d{2})\b', next_words) or  # Has year
-                                re.search(r'\b(kft|zrt|bt|nyrt)\b', next_words.lower()) or  # Has company type
+                            if (re.search(r'\b(20\d{2}|19\d{2})\b', next_words) or
+                                re.search(r'\b(kft|zrt|bt|nyrt)\b', next_words.lower()) or
                                 'munkahely' in next_words.lower()):
                                 summary_end_idx = i
                                 break
@@ -248,13 +223,11 @@ class ProfileExtractor:
 
                 return summary_text
 
-            # 2. Second priority: Check parsed profile section
             if parsed_sections and parsed_sections.get('profile'):
                 profile_text = clean_and_join(parsed_sections['profile'])
                 if profile_text:
                     return profile_text
 
-            # 3. Fallback: Use existing header-based extraction
             summary_headers = [
                 "summary", "profile", "about me", "introduction", "objective", "overview",
                 "összefoglaló", "bemutatkozás", "profil", "rólam", "szakmai célok", "áttekintés",
