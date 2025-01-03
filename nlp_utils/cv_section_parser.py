@@ -23,7 +23,7 @@ class CVSectionParser:
             self._init_patterns()
             self.current_text = ""
             try:
-                self.model = spacy.load("textcat_output_v2/model-best")
+                self.model = spacy.load("models/textcat_model/model-best")
                 logger.info("Loaded English text classification model")
             except Exception as e:
                 self.model = None

@@ -23,7 +23,7 @@ class CVSectionParserHu:
             
             # Initialize FastText model for text classification
             try:
-                self.model = fasttext.load_model("fasttext_output_v3/resume_classifier.ftz")
+                self.model = fasttext.load_model("models/fasttext_model/resume_classifier.ftz")
                 logger.info("Loaded Hungarian text classification model")
             except Exception as e:
                 self.model = None
