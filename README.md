@@ -87,16 +87,11 @@ Wozify-CV-Parser/
 │   ├── education_extractor.py
 │   └── ...
 ├── models/               # Trained NLP models
-│   ├── en/              # English models
-│   └── hu/              # Hungarian models
+│   ├── textcat_model/    # English models
+│   └── fasttext_model/   # Hungarian models
 ├── static/              # Frontend assets
 ├── templates/           # HTML templates
 ├── outputs/             # Processed outputs
-│   ├── english/
-│   └── hungarian/
-└── CVs/                 # Input CV storage
-    ├── english/
-    └── hungarian/
 ```
 
 ## Configuration
@@ -137,7 +132,3 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
   - Returns structured JSON with extracted information
 
 - `GET /check_json/{filename}`: Check if a JSON file exists and return its contents
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
