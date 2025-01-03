@@ -73,6 +73,19 @@ python -m spacy download en_core_web_sm
 python -m spacy download hu_core_news_md
 ```
 
+7. Download custom trained models
+```bash
+# Create models directory
+mkdir -p models/textcat_model models/fasttext_model
+```
+Download the models from Hugging Face:
+- English CV Section Classification Model: [ThunderJaw/en_textcat_resume_sections](https://huggingface.co/ThunderJaw/en_textcat_resume_sections)
+- Hungarian CV Section Classification Model: [ThunderJaw/hu_fasttext_resume_sections](https://huggingface.co/ThunderJaw/hu_fasttext_resume_sections)
+
+Place the downloaded model files in their respective directories:
+- English model files → `models/textcat_model/`
+- Hungarian model files → `models/fasttext_model/`
+
 ## Project Structure
 
 ```
